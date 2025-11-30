@@ -1,0 +1,2208 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore Bracci Gibus - V6.0 Advanced FEM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        .control-group {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+        .control-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            display: block;
+        }
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #334155;
+            appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+        input[type="number"], select {
+            width: 100%;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: #334155;
+            border: 1px solid #475569;
+            color: var(--text-primary);
+            font-size: 12px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        .hidden { display: none !important; }
+        .tab-btn {
+            padding: 8px 16px;
+            border-radius: 6px 6px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .tab-btn.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        .result-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .result-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .result-unit {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .result-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 20px;
+            background: #334155;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch.active {
+            background: var(--accent);
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+        .toggle-switch.active::after {
+            transform: translateX(20px);
+        }
+        .tooltip {
+            position: relative;
+        }
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            background: #000;
+            color: white;
+            font-size: 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-700 px-4 py-3">
+        <div class="flex items-center justify-between max-w-screen-2xl mx-auto">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-bold text-white">Simulatore Bracci Gibus</h1>
+                <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded">V6.0 Advanced FEM</span>
+                <span id="convergence-badge" class="bg-green-500 text-white px-3 py-1 rounded text-xs">CONVERGED</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-400">Ultimo aggiornamento: <span id="update-time">--</span></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex h-[calc(100vh-60px)]">
+        <!-- Left Sidebar - Controls -->
+        <aside class="w-80 bg-slate-900 overflow-y-auto p-4 border-r border-slate-700">
+            <!-- Mode Selection -->
+            <div class="control-group">
+                <span class="control-label">Modalità Carico</span>
+                <div class="flex gap-2 mt-2">
+                    <button id="btn-mode-mass" class="btn btn-primary flex-1" onclick="setMode('mass')">Massa</button>
+                    <button id="btn-mode-pulley" class="btn flex-1 bg-slate-600" onclick="setMode('pulley')">Carrucola</button>
+                </div>
+            </div>
+
+            <!-- Mass Mode Controls -->
+            <div id="mass-controls">
+                <div class="control-group">
+                    <label class="control-label">Massa (kg)</label>
+                    <input type="range" id="input-mass" min="0" max="200" value="50" oninput="updateState('mass', this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>0</span>
+                        <span id="display-mass">50 kg</span>
+                        <span>200</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Massa Residua (kg)</label>
+                    <input type="range" id="input-mass-residual" min="0" max="50" value="0" oninput="updateState('massResidual', this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>0</span>
+                        <span id="display-mass-residual">0 kg</span>
+                        <span>50</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pulley Mode Controls -->
+            <div id="pulley-controls" class="hidden">
+                <div class="control-group">
+                    <label class="control-label">Forza Fune (N)</label>
+                    <input type="range" id="input-pulley-force" min="0" max="2000" value="500" oninput="updateState('pulleyForce', this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>0</span>
+                        <span id="display-pulley-force">500 N</span>
+                        <span>2000</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Altezza Carrucola (m)</label>
+                    <input type="range" id="input-pulley-y" min="0.5" max="3" step="0.1" value="1.0" oninput="updateState('pulleyY', this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>0.5</span>
+                        <span id="display-pulley-y">1.0 m</span>
+                        <span>3.0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Geometry -->
+            <div class="control-group">
+                <span class="control-label font-semibold text-white">Geometria Globale</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Lunghezza Braccio (m)</label>
+                <input type="range" id="input-length" min="1" max="5" step="0.1" value="2" oninput="updateState('length', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>1m</span>
+                    <span id="display-length">2.0 m</span>
+                    <span>5m</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Penetrazione Spalla (cm)</label>
+                <input type="range" id="input-penetration" min="10" max="50" value="30" oninput="updateState('penetration', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>10</span>
+                    <span id="display-penetration">30 cm</span>
+                    <span>50</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Distanza da Parete (cm)</label>
+                <input type="range" id="input-dist-wall" min="5" max="30" value="10" oninput="updateState('distWall', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>5</span>
+                    <span id="display-dist-wall">10 cm</span>
+                    <span>30</span>
+                </div>
+            </div>
+
+            <!-- Beam Profile -->
+            <div class="control-group">
+                <span class="control-label font-semibold text-white">Profilo Braccio</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Forma Profilo</label>
+                <select id="input-beam-shape" onchange="updateState('beamShape', this.value)">
+                    <option value="rect">Rettangolare</option>
+                    <option value="hollow">Cavo</option>
+                    <option value="ibeam">I-Beam</option>
+                    <option value="cChannel">C-Channel</option>
+                    <option value="xRib">X-Rib</option>
+                    <option value="aero">Aero</option>
+                    <option value="oval">Ovale</option>
+                    <option value="power">Power</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Altezza (cm)</label>
+                <input type="range" id="input-height" min="3" max="15" step="0.1" value="6.2" oninput="updateState('height', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>3</span>
+                    <span id="display-height">6.2 cm</span>
+                    <span>15</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Larghezza (cm)</label>
+                <input type="range" id="input-width" min="2" max="10" step="0.1" value="3.3" oninput="updateState('width', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>2</span>
+                    <span id="display-width">3.3 cm</span>
+                    <span>10</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Spessore V (mm)</label>
+                <input type="range" id="input-thickness-v" min="1" max="10" step="0.5" value="3" oninput="updateState('thicknessV', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>1</span>
+                    <span id="display-thickness-v">3 mm</span>
+                    <span>10</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Spessore H (mm)</label>
+                <input type="range" id="input-thickness-h" min="1" max="10" step="0.5" value="3" oninput="updateState('thicknessH', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>1</span>
+                    <span id="display-thickness-h">3 mm</span>
+                    <span>10</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Raggio Raccordo (mm)</label>
+                <input type="range" id="input-fillet" min="0" max="10" step="0.5" value="4" oninput="updateState('filletRadius', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>0</span>
+                    <span id="display-fillet">4 mm</span>
+                    <span>10</span>
+                </div>
+            </div>
+
+            <!-- LED Groove -->
+            <div class="control-group">
+                <div class="flex items-center justify-between">
+                    <span class="control-label font-semibold text-white">Cava LED</span>
+                    <div id="toggle-led" class="toggle-switch" onclick="toggleLedGroove()"></div>
+                </div>
+            </div>
+            <div id="led-groove-params" class="hidden">
+                <div class="control-group">
+                    <label class="control-label">Larghezza Cava (mm)</label>
+                    <input type="range" id="input-groove-width" min="5" max="30" value="12" oninput="updateState('grooveWidth', this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>5</span>
+                        <span id="display-groove-width">12 mm</span>
+                        <span>30</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Profondità Cava (mm)</label>
+                    <input type="range" id="input-groove-depth" min="3" max="20" value="8" oninput="updateState('grooveDepth', this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>3</span>
+                        <span id="display-groove-depth">8 mm</span>
+                        <span>20</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insert/Shoulder -->
+            <div class="control-group">
+                <span class="control-label font-semibold text-white">Spalla/Inserto</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Forma Inserto</label>
+                <select id="input-insert-shape" onchange="updateState('insertShape', this.value)">
+                    <option value="solid">Solido</option>
+                    <option value="hollow">Cavo</option>
+                    <option value="ibeam">I-Beam</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Altezza Inserto (cm)</label>
+                <input type="range" id="input-insert-height" min="5" max="15" step="0.1" value="9.4" oninput="updateState('insertHeight', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>5</span>
+                    <span id="display-insert-height">9.4 cm</span>
+                    <span>15</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Larghezza Inserto (cm)</label>
+                <input type="range" id="input-insert-width" min="3" max="10" step="0.1" value="4.4" oninput="updateState('insertWidth', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>3</span>
+                    <span id="display-insert-width">4.4 cm</span>
+                    <span>10</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="flex items-center justify-between">
+                    <span class="control-label">Auto-Fit</span>
+                    <div id="toggle-autofit" class="toggle-switch active" onclick="toggleAutoFit()"></div>
+                </div>
+            </div>
+
+            <!-- Materials -->
+            <div class="control-group">
+                <span class="control-label font-semibold text-white">Materiali</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Materiale Braccio</label>
+                <select id="input-beam-mat" onchange="updateState('beamMatKey', this.value)">
+                    <option value="6060-T6">6060 T6</option>
+                    <option value="6061-T6" selected>6061 T6</option>
+                    <option value="6063-T6">6063 T6</option>
+                    <option value="6082-T6">6082 T6</option>
+                    <option value="7075-T6">7075 T6 (Ergal)</option>
+                    <option value="2024-T3">2024 T3</option>
+                    <option value="6082-CNC">6082 T6 (CNC)</option>
+                    <option value="7075-CNC">7075 T6 (CNC)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Materiale Inserto</label>
+                <select id="input-insert-mat" onchange="updateState('insertMatKey', this.value)">
+                    <option value="46100-F" selected>EN AB 46100</option>
+                    <option value="46000-F">EN AB 46000</option>
+                    <option value="47100-F">EN AB 47100</option>
+                    <option value="42100-T6">EN AB 42100 T6</option>
+                    <option value="ZA-27">Zamak 27</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Temperatura (°C)</label>
+                <input type="range" id="input-temperature" min="-30" max="80" value="20" oninput="updateState('temperature', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>-30</span>
+                    <span id="display-temperature">20 °C</span>
+                    <span>80</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Porosità (%)</label>
+                <input type="range" id="input-porosity" min="0" max="10" step="0.5" value="0" oninput="updateState('porosity', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>0</span>
+                    <span id="display-porosity">0 %</span>
+                    <span>10</span>
+                </div>
+            </div>
+
+            <!-- Solver Options -->
+            <div class="control-group">
+                <span class="control-label font-semibold text-white">Opzioni Solver</span>
+            </div>
+            <div class="control-group">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="control-label">Effetti P-Delta</span>
+                    <div id="toggle-pdelta" class="toggle-switch active" onclick="togglePDelta()"></div>
+                </div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="control-label">Taglio (Timoshenko)</span>
+                    <div id="toggle-shear" class="toggle-switch" onclick="toggleShear()"></div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="control-label">Non-Lineare (R-O)</span>
+                    <div id="toggle-nonlinear" class="toggle-switch active" onclick="toggleNonlinear()"></div>
+                </div>
+            </div>
+
+            <!-- Bolts -->
+            <div class="control-group">
+                <label class="control-label">Numero Viti</label>
+                <input type="range" id="input-bolts" min="2" max="6" value="3" oninput="updateState('numBolts', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>2</span>
+                    <span id="display-bolts">3</span>
+                    <span>6</span>
+                </div>
+            </div>
+
+            <!-- Scale -->
+            <div class="control-group">
+                <label class="control-label">Fattore Scala Visualizzazione</label>
+                <input type="range" id="input-scale" min="0.5" max="3" step="0.1" value="1" oninput="updateState('scaleFactor', this.value)">
+                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>0.5x</span>
+                    <span id="display-scale">1.0x</span>
+                    <span>3x</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col">
+            <!-- Canvas Area -->
+            <div class="flex-1 relative bg-slate-950">
+                <!-- FEM Canvas -->
+                <svg id="fem-canvas" class="w-full h-full">
+                    <defs>
+                        <marker id="arrow-sm" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
+                            <polygon points="0 0, 6 3, 0 6" fill="#525252"/>
+                        </marker>
+                        <marker id="arrow-sm-rev" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto">
+                            <polygon points="6 0, 0 3, 6 6" fill="#525252"/>
+                        </marker>
+                        <marker id="arrow-force" markerWidth="8" markerHeight="8" refX="0" refY="4" orient="auto">
+                            <polygon points="0 0, 8 4, 0 8" fill="#ef4444"/>
+                        </marker>
+                        <pattern id="grid-pattern" width="50" height="50" patternUnits="userSpaceOnUse">
+                            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#1e293b" stroke-width="1"/>
+                        </pattern>
+                        <linearGradient id="beam-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#64748b"/>
+                            <stop offset="50%" style="stop-color:#94a3b8"/>
+                            <stop offset="100%" style="stop-color:#64748b"/>
+                        </linearGradient>
+                        <linearGradient id="insert-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#78716c"/>
+                            <stop offset="50%" style="stop-color:#a8a29e"/>
+                            <stop offset="100%" style="stop-color:#78716c"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Grid layer -->
+                    <g id="grid-layer"></g>
+                    <!-- Main drawing layer -->
+                    <g id="drawing-layer"></g>
+                    <!-- Annotations layer -->
+                    <g id="annotations-layer"></g>
+                </svg>
+
+                <!-- Solver Info Overlay -->
+                <div id="solver-info" class="absolute bottom-4 left-4 bg-black/80 text-white p-3 rounded text-xs font-mono">
+                    <div>Iterazioni: <span id="info-iterations">0</span></div>
+                    <div>Residuo: <span id="info-residual">0.00e+0</span></div>
+                    <div>Tempo: <span id="info-time">0</span> ms</div>
+                </div>
+            </div>
+
+            <!-- Bottom Results Panel -->
+            <div class="h-36 bg-slate-900 border-t border-slate-700 p-4">
+                <div class="flex gap-4 h-full">
+                    <!-- Section Preview -->
+                    <div class="w-48 bg-slate-800 rounded-lg p-2 flex flex-col">
+                        <div class="flex gap-1 mb-2">
+                            <button id="tab-beam" class="tab-btn active text-xs" onclick="setPreviewMode('beam')">Braccio</button>
+                            <button id="tab-insert" class="tab-btn text-xs" onclick="setPreviewMode('insert')">Spalla</button>
+                        </div>
+                        <svg id="section-preview" class="flex-1 w-full" viewBox="0 0 200 100"></svg>
+                    </div>
+
+                    <!-- Results Grid -->
+                    <div class="flex-1 grid grid-cols-6 gap-3">
+                        <div class="result-card">
+                            <div class="result-label">Freccia Max</div>
+                            <div class="result-value" id="res-deflection">0.00</div>
+                            <div class="result-unit">mm</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Stress Max Braccio</div>
+                            <div class="result-value" id="res-stress-beam">0.0</div>
+                            <div class="result-unit">MPa</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Stress Max Spalla</div>
+                            <div class="result-value" id="res-stress-insert">0.0</div>
+                            <div class="result-unit">MPa</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">SF Braccio</div>
+                            <div class="result-value" id="res-sf-beam">0.0</div>
+                            <div class="result-unit">EC9</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">SF Spalla</div>
+                            <div class="result-value" id="res-sf-insert">0.0</div>
+                            <div class="result-unit">EC9</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Freq. Naturale</div>
+                            <div class="result-value" id="res-freq">0.0</div>
+                            <div class="result-unit">Hz</div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Results -->
+                    <div class="w-48 flex flex-col gap-2">
+                        <div class="result-card flex-1">
+                            <div class="result-label">Rotazione θ</div>
+                            <div class="result-value text-lg" id="res-rotation">0.00</div>
+                            <div class="result-unit">gradi</div>
+                        </div>
+                        <div class="result-card flex-1">
+                            <div class="result-label">Momento Max</div>
+                            <div class="result-value text-lg" id="res-moment">0.0</div>
+                            <div class="result-unit">Nm</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // =====================================================
+        // MATERIALS DATABASE
+        // =====================================================
+        const MATERIALS = {
+            '6060-T6': { E: 69.0, G: 26.0, yield: 150, tensile: 190, n_RO: 25, density: 2700, name: "6060 T6" },
+            '6061-T6': { E: 70.0, G: 26.5, yield: 240, tensile: 290, n_RO: 20, density: 2700, name: "6061 T6" },
+            '6063-T6': { E: 69.5, G: 26.0, yield: 170, tensile: 215, n_RO: 22, density: 2700, name: "6063 T6" },
+            '6082-T6': { E: 70.5, G: 26.5, yield: 260, tensile: 310, n_RO: 18, density: 2700, name: "6082 T6" },
+            '7075-T6': { E: 71.7, G: 27.0, yield: 505, tensile: 570, n_RO: 12, density: 2810, name: "7075 T6 (Ergal)" },
+            '2024-T3': { E: 73.1, G: 28.0, yield: 345, tensile: 480, n_RO: 10, density: 2780, name: "2024 T3" },
+            '46100-F': { E: 71.0, G: 26.5, yield: 140, tensile: 240, n_RO: 15, density: 2650, name: "EN AB 46100" },
+            '46000-F': { E: 72.0, G: 27.0, yield: 140, tensile: 240, n_RO: 15, density: 2650, name: "EN AB 46000" },
+            '47100-F': { E: 75.0, G: 28.0, yield: 150, tensile: 260, n_RO: 14, density: 2680, name: "EN AB 47100" },
+            'ZA-27':   { E: 78.0, G: 30.0, yield: 370, tensile: 400, n_RO: 8, density: 5000, name: "Zamak 27" },
+            '42100-T6': { E: 71.0, G: 26.5, yield: 210, tensile: 290, n_RO: 16, density: 2680, name: "EN AB 42100 T6" },
+            '6082-CNC': { E: 70.0, G: 26.5, yield: 260, tensile: 310, n_RO: 18, density: 2700, name: "6082 T6 (CNC)" },
+            '7075-CNC': { E: 71.7, G: 27.0, yield: 500, tensile: 570, n_RO: 12, density: 2810, name: "7075 T6 (CNC)" },
+        };
+
+        // =====================================================
+        // STATE MANAGEMENT
+        // =====================================================
+        const state = {
+            // Load mode
+            mode: 'mass',
+            mass: 50,
+            massResidual: 0,
+            pulleyForce: 500,
+            pulleyY: 1.0,
+            
+            // Global geometry
+            length: 2,
+            penetration: 30,
+            distWall: 10,
+            
+            // Beam profile
+            height: 6.2,
+            width: 3.3,
+            thicknessV: 3,
+            thicknessH: 3,
+            beamShape: 'rect',
+            filletRadius: 4.0,
+            
+            // LED groove
+            ledGroove: false,
+            grooveWidth: 12,
+            grooveDepth: 8,
+            
+            // Insert/Shoulder
+            insertHeight: 9.4,
+            insertWidth: 4.4,
+            insertShape: 'solid',
+            insertFlangeT: 8,
+            insertWebT: 6,
+            insertWallT: 5,
+            insertRibT: 4,
+            insertRadiusInternal: 4,
+            autoFit: true,
+            
+            // Materials
+            beamMatKey: '6061-T6',
+            insertMatKey: '46100-F',
+            porosity: 0,
+            temperature: 20,
+            
+            // Bolts
+            numBolts: 3,
+            
+            // Visualization
+            scaleFactor: 1,
+            previewMode: 'beam',
+            
+            // Solver options
+            enablePDelta: true,
+            enableShear: false,
+            enableNonlinear: true,
+            
+            // Custom profiles
+            customProfile: null,
+            customInsertProfile: null,
+            
+            // Internal computed state
+            innerBeamW_real_m: 0,
+            innerBeamH_real_m: 0,
+            lastAdaptScale: 1.0
+        };
+
+        // Solver results
+        let solverResults = {
+            nodes: [],
+            deflectionMax: 0,
+            stressBeam: 0,
+            stressInsert: 0,
+            momentMax: 0,
+            rotationEnd: 0,
+            frequency: 0,
+            sfBeam: 0,
+            sfInsert: 0,
+            iterations: 0,
+            residual: 0,
+            time: 0,
+            converged: true
+        };
+
+        // Debounce timer
+        let updateTimeout = null;
+
+        // =====================================================
+        // TEMPERATURE-DEPENDENT PROPERTIES
+        // =====================================================
+        function getTemperatureCoefficient(T) {
+            // Temperature coefficient for aluminum properties
+            // Reference temperature: 20°C
+            const Tref = 20;
+            const dT = T - Tref;
+            
+            // E decreases about 0.04% per °C above 20°C
+            const E_coef = 1 - 0.0004 * dT;
+            
+            // Yield strength decreases about 0.1% per °C above 20°C
+            const yield_coef = 1 - 0.001 * dT;
+            
+            return {
+                E: Math.max(0.7, Math.min(1.1, E_coef)),
+                yield: Math.max(0.6, Math.min(1.15, yield_coef))
+            };
+        }
+
+        function getMaterialWithTemperature(matKey, temperature) {
+            const baseMat = MATERIALS[matKey];
+            if (!baseMat) return null;
+            
+            const coef = getTemperatureCoefficient(temperature);
+            
+            return {
+                ...baseMat,
+                E: baseMat.E * coef.E,
+                yield: baseMat.yield * coef.yield,
+                tensile: baseMat.tensile * coef.yield
+            };
+        }
+
+        // =====================================================
+        // SECTION PROPERTIES CALCULATOR
+        // =====================================================
+        function calculateSectionProperties(shape, H, W, Sv, Sh, filletR = 0, ledGroove = false, grooveW = 0, grooveH = 0) {
+            // Convert all to meters for calculation
+            const H_m = H / 100;
+            const W_m = W / 100;
+            const Sv_m = Sv / 1000;
+            const Sh_m = Sh / 1000;
+            const fR_m = filletR / 1000;
+            const gW_m = ledGroove ? grooveW / 1000 : 0;
+            const gH_m = ledGroove ? grooveH / 1000 : 0;
+            
+            let A = 0;  // Area
+            let Iy = 0; // Second moment about y-axis (vertical bending)
+            let Iz = 0; // Second moment about z-axis
+            let k = 5/6; // Shear factor
+            
+            switch(shape) {
+                case 'rect':
+                case 'hollow':
+                    // Outer rectangle
+                    A = W_m * H_m;
+                    Iy = (W_m * Math.pow(H_m, 3)) / 12;
+                    Iz = (H_m * Math.pow(W_m, 3)) / 12;
+                    
+                    if (shape === 'hollow' || Sv_m > 0) {
+                        // Inner rectangle
+                        const innerW = W_m - 2 * Sh_m;
+                        const innerH = H_m - 2 * Sv_m;
+                        if (innerW > 0 && innerH > 0) {
+                            A -= innerW * innerH;
+                            Iy -= (innerW * Math.pow(innerH, 3)) / 12;
+                            Iz -= (innerH * Math.pow(innerW, 3)) / 12;
+                        }
+                    }
+                    
+                    // LED groove subtraction
+                    if (ledGroove && gW_m > 0 && gH_m > 0) {
+                        A -= gW_m * gH_m;
+                        // Adjust Iy for groove (conservative approximation)
+                        const grooveCentroidY = H_m/2 - gH_m/2;
+                        Iy -= (gW_m * Math.pow(gH_m, 3)) / 12 + gW_m * gH_m * Math.pow(grooveCentroidY, 2);
+                    }
+                    break;
+                    
+                case 'ibeam':
+                    // I-beam: two flanges + web
+                    const flangeA = W_m * Sv_m;
+                    const webA = Sh_m * (H_m - 2 * Sv_m);
+                    A = 2 * flangeA + webA;
+                    
+                    // Iy for I-beam
+                    const flangeIy = (W_m * Math.pow(Sv_m, 3)) / 12;
+                    const flangeDist = (H_m - Sv_m) / 2;
+                    const webIy = (Sh_m * Math.pow(H_m - 2 * Sv_m, 3)) / 12;
+                    Iy = 2 * (flangeIy + flangeA * Math.pow(flangeDist, 2)) + webIy;
+                    
+                    k = A / (Sh_m * (H_m - 2 * Sv_m)); // Approximate shear factor
+                    break;
+                    
+                case 'cChannel':
+                    // C-channel: two flanges + web
+                    const cFlangeA = W_m * Sv_m;
+                    const cWebA = Sh_m * (H_m - 2 * Sv_m);
+                    A = 2 * cFlangeA + cWebA;
+                    
+                    const cFlangeIy = (W_m * Math.pow(Sv_m, 3)) / 12;
+                    const cFlangeDist = (H_m - Sv_m) / 2;
+                    const cWebIy = (Sh_m * Math.pow(H_m - 2 * Sv_m, 3)) / 12;
+                    Iy = 2 * (cFlangeIy + cFlangeA * Math.pow(cFlangeDist, 2)) + cWebIy;
+                    break;
+                    
+                case 'xRib':
+                    // X-rib: outer shell + diagonal ribs
+                    const shellW = W_m - 2 * Sh_m;
+                    const shellH = H_m - 2 * Sv_m;
+                    A = W_m * H_m;
+                    if (shellW > 0 && shellH > 0) {
+                        // Subtract hollow area, add rib area
+                        const ribThickness = Math.min(Sh_m, Sv_m) * 0.5;
+                        const diagLength = Math.sqrt(shellW * shellW + shellH * shellH);
+                        A = A - shellW * shellH + 2 * diagLength * ribThickness;
+                    }
+                    Iy = (W_m * Math.pow(H_m, 3)) / 12 * 0.6; // Approximation
+                    break;
+                    
+                case 'aero':
+                case 'oval':
+                    // Approximate ellipse-like section
+                    A = Math.PI * (W_m/2) * (H_m/2);
+                    Iy = Math.PI * W_m * Math.pow(H_m, 3) / 64;
+                    Iz = Math.PI * H_m * Math.pow(W_m, 3) / 64;
+                    
+                    if (Sv_m > 0) {
+                        const innerW = W_m - 2 * Sh_m;
+                        const innerH = H_m - 2 * Sv_m;
+                        if (innerW > 0 && innerH > 0) {
+                            A -= Math.PI * (innerW/2) * (innerH/2);
+                            Iy -= Math.PI * innerW * Math.pow(innerH, 3) / 64;
+                        }
+                    }
+                    break;
+                    
+                case 'power':
+                    // Power profile with chamfered corners
+                    const chamfer = Math.min(W_m, H_m) * 0.15;
+                    A = W_m * H_m - 2 * chamfer * chamfer;
+                    Iy = (W_m * Math.pow(H_m, 3)) / 12 * 0.92; // Approximation
+                    
+                    if (Sv_m > 0) {
+                        const innerW = W_m - 2 * Sh_m;
+                        const innerH = H_m - 2 * Sv_m;
+                        if (innerW > 0 && innerH > 0) {
+                            A -= innerW * innerH;
+                            Iy -= (innerW * Math.pow(innerH, 3)) / 12;
+                        }
+                    }
+                    break;
+                    
+                default:
+                    A = W_m * H_m;
+                    Iy = (W_m * Math.pow(H_m, 3)) / 12;
+            }
+            
+            // Ensure positive values
+            A = Math.max(A, 1e-8);
+            Iy = Math.max(Iy, 1e-12);
+            
+            return { A, Iy, Iz: Iz || Iy, k };
+        }
+
+        // =====================================================
+        // RAMBERG-OSGOOD MODEL
+        // =====================================================
+        function rambergOsgoodStrain(stress, E, sigmaY, n_RO) {
+            // ε = σ/E + 0.002*(σ/σy)^n
+            const elasticStrain = stress / (E * 1e9); // Convert GPa to Pa
+            const plasticStrain = 0.002 * Math.pow(Math.abs(stress) / sigmaY, n_RO);
+            return elasticStrain + (stress >= 0 ? plasticStrain : -plasticStrain);
+        }
+
+        function rambergOsgoodTangentModulus(stress, E, sigmaY, n_RO) {
+            // dε/dσ = 1/E + 0.002*n/σy * (σ/σy)^(n-1)
+            const E_Pa = E * 1e9;
+            if (Math.abs(stress) < 1) return E_Pa;
+            
+            const dPlastic = 0.002 * n_RO / sigmaY * Math.pow(Math.abs(stress) / sigmaY, n_RO - 1);
+            const tangent = 1 / (1/E_Pa + dPlastic);
+            return Math.max(tangent, E_Pa * 0.01); // Minimum 1% of E
+        }
+
+        // =====================================================
+        // NEWTON-RAPHSON FEM SOLVER
+        // =====================================================
+        function solveFEM() {
+            const startTime = performance.now();
+            
+            // Get material properties with temperature adjustment
+            const beamMat = getMaterialWithTemperature(state.beamMatKey, state.temperature);
+            const insertMat = getMaterialWithTemperature(state.insertMatKey, state.temperature);
+            
+            if (!beamMat || !insertMat) {
+                console.error('Invalid material');
+                return;
+            }
+            
+            // Apply porosity reduction
+            const porosityFactor = 1 - state.porosity / 100;
+            const E_beam = beamMat.E * porosityFactor;
+            const E_insert = insertMat.E * porosityFactor;
+            
+            // Section properties
+            const beamProps = calculateSectionProperties(
+                state.beamShape,
+                state.height,
+                state.width,
+                state.thicknessV,
+                state.thicknessH,
+                state.filletRadius,
+                state.ledGroove,
+                state.grooveWidth,
+                state.grooveDepth
+            );
+            
+            const insertProps = calculateSectionProperties(
+                state.insertShape,
+                state.insertHeight,
+                state.insertWidth,
+                state.insertFlangeT || state.thicknessV,
+                state.insertWebT || state.thicknessH
+            );
+            
+            // Geometry
+            const L = state.length; // Beam length in meters
+            const penetration = state.penetration / 100; // Convert to meters
+            const cantileverLength = L - penetration;
+            
+            // Calculate load
+            let F = 0; // Force in N
+            let Fx = 0, Fy = 0; // Force components
+            
+            if (state.mode === 'mass') {
+                F = (state.mass + state.massResidual) * 9.81;
+                Fx = 0;
+                Fy = -F; // Downward
+            } else {
+                // Pulley mode - calculate force direction
+                F = state.pulleyForce;
+                const pulleyX = cantileverLength * 0.9; // Pulley near tip
+                const tipX = cantileverLength;
+                const dx = pulleyX - tipX;
+                const dy = state.pulleyY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0.001) {
+                    Fx = F * dx / dist;
+                    Fy = F * dy / dist;
+                } else {
+                    Fy = -F;
+                }
+            }
+            
+            // FEM discretization
+            const numElements = 20;
+            const nodes = [];
+            const dxElem = cantileverLength / numElements;
+            
+            for (let i = 0; i <= numElements; i++) {
+                nodes.push({
+                    x: i * dxElem,
+                    y: 0,
+                    theta: 0
+                });
+            }
+            
+            // Newton-Raphson iteration
+            const tolerance = 1e-6;
+            const maxIterations = 100;
+            let iterations = 0;
+            let residual = 1;
+            let converged = false;
+            
+            // EI value
+            const EI = E_beam * 1e9 * beamProps.Iy;
+            const GA_k = state.enableShear ? beamMat.G * 1e9 * beamProps.A * beamProps.k : Infinity;
+            
+            // Simple beam theory solution as starting point
+            let deflections = new Array(numElements + 1).fill(0);
+            let rotations = new Array(numElements + 1).fill(0);
+            let moments = [];
+            
+            while (iterations < maxIterations && residual > tolerance) {
+                iterations++;
+                
+                // Calculate moment distribution
+                moments = [];
+                for (let i = 0; i <= numElements; i++) {
+                    const x = nodes[i].x;
+                    // Moment at position x due to tip load
+                    const M = Fy * (cantileverLength - x);
+                    moments.push(M);
+                }
+                
+                // P-Delta effect
+                let P_delta_moment = 0;
+                if (state.enablePDelta && iterations > 1) {
+                    const tipDeflection = deflections[numElements];
+                    P_delta_moment = Fy * tipDeflection;
+                }
+                
+                // Calculate curvature and integrate for deflection
+                const curvatures = [];
+                for (let i = 0; i <= numElements; i++) {
+                    let M = moments[i] + P_delta_moment * (1 - nodes[i].x / cantileverLength);
+                    
+                    // Get effective EI (possibly non-linear)
+                    let effectiveEI = EI;
+                    if (state.enableNonlinear) {
+                        const stress = Math.abs(M * (state.height / 200)) / beamProps.Iy;
+                        const Et = rambergOsgoodTangentModulus(stress / 1e6, E_beam, beamMat.yield, beamMat.n_RO);
+                        effectiveEI = Et * beamProps.Iy;
+                    }
+                    
+                    curvatures.push(M / effectiveEI);
+                }
+                
+                // Integration for rotation (integral of curvature)
+                const newRotations = [0]; // Fixed at support
+                for (let i = 1; i <= numElements; i++) {
+                    const avgCurv = (curvatures[i] + curvatures[i-1]) / 2;
+                    newRotations.push(newRotations[i-1] + avgCurv * dxElem);
+                }
+                
+                // Integration for deflection (integral of rotation)
+                const newDeflections = [0]; // Fixed at support
+                for (let i = 1; i <= numElements; i++) {
+                    const avgRot = (newRotations[i] + newRotations[i-1]) / 2;
+                    let dy = avgRot * dxElem;
+                    
+                    // Add shear deformation (Timoshenko)
+                    if (state.enableShear && GA_k < Infinity) {
+                        const V = Fy; // Shear force
+                        dy += V * dxElem / GA_k;
+                    }
+                    
+                    newDeflections.push(newDeflections[i-1] + dy);
+                }
+                
+                // Calculate residual
+                residual = 0;
+                for (let i = 0; i <= numElements; i++) {
+                    residual += Math.pow(newDeflections[i] - deflections[i], 2);
+                }
+                residual = Math.sqrt(residual);
+                
+                // Update deflections
+                deflections = newDeflections;
+                rotations = newRotations;
+                
+                // Early exit if not using nonlinear or P-delta
+                if (!state.enableNonlinear && !state.enablePDelta) {
+                    converged = true;
+                    break;
+                }
+            }
+            
+            converged = residual <= tolerance;
+            
+            // Update nodes with results
+            for (let i = 0; i <= numElements; i++) {
+                nodes[i].y = deflections[i];
+                nodes[i].theta = rotations[i];
+            }
+            
+            // Calculate stresses
+            const maxMoment = Math.abs(moments[0]); // Max at support
+            const c_beam = state.height / 200; // Distance from neutral axis to outer fiber
+            const stressBeam = maxMoment * c_beam / beamProps.Iy / 1e6; // MPa
+            
+            // Insert stress (simplified)
+            const c_insert = state.insertHeight / 200;
+            const stressInsert = maxMoment * c_insert / insertProps.Iy / 1e6;
+            
+            // Safety factors (Eurocode 9)
+            const gamma_M1 = 1.1; // Partial factor
+            const sfBeam = beamMat.yield / (stressBeam * gamma_M1);
+            const sfInsert = insertMat.yield / (stressInsert * gamma_M1);
+            
+            // Natural frequency (simplified cantilever)
+            const massPerLength = beamMat.density * beamProps.A;
+            const totalMass = massPerLength * cantileverLength + state.mass;
+            const k_eq = 3 * EI / Math.pow(cantileverLength, 3);
+            const freq = (1 / (2 * Math.PI)) * Math.sqrt(k_eq / totalMass);
+            
+            // Store results
+            solverResults = {
+                nodes: nodes,
+                deflectionMax: Math.abs(deflections[numElements]) * 1000, // mm
+                stressBeam: stressBeam,
+                stressInsert: stressInsert,
+                momentMax: maxMoment,
+                rotationEnd: rotations[numElements] * 180 / Math.PI, // degrees
+                frequency: freq,
+                sfBeam: sfBeam,
+                sfInsert: sfInsert,
+                iterations: iterations,
+                residual: residual,
+                time: performance.now() - startTime,
+                converged: converged
+            };
+            
+            return solverResults;
+        }
+
+        // =====================================================
+        // UI FUNCTIONS
+        // =====================================================
+        function setMode(mode) {
+            state.mode = mode;
+            document.getElementById('btn-mode-mass').className = mode === 'mass' ? 'btn btn-primary flex-1' : 'btn flex-1 bg-slate-600';
+            document.getElementById('btn-mode-pulley').className = mode === 'pulley' ? 'btn btn-primary flex-1' : 'btn flex-1 bg-slate-600';
+            document.getElementById('mass-controls').classList.toggle('hidden', mode !== 'mass');
+            document.getElementById('pulley-controls').classList.toggle('hidden', mode !== 'pulley');
+            debouncedUpdate();
+        }
+
+        function setPreviewMode(mode) {
+            state.previewMode = mode;
+            document.getElementById('tab-beam').classList.toggle('active', mode === 'beam');
+            document.getElementById('tab-insert').classList.toggle('active', mode === 'insert');
+            updateSectionPreview();
+        }
+
+        function toggleLedGroove() {
+            state.ledGroove = !state.ledGroove;
+            document.getElementById('toggle-led').classList.toggle('active', state.ledGroove);
+            document.getElementById('led-groove-params').classList.toggle('hidden', !state.ledGroove);
+            debouncedUpdate();
+        }
+
+        function toggleAutoFit() {
+            state.autoFit = !state.autoFit;
+            document.getElementById('toggle-autofit').classList.toggle('active', state.autoFit);
+            debouncedUpdate();
+        }
+
+        function togglePDelta() {
+            state.enablePDelta = !state.enablePDelta;
+            document.getElementById('toggle-pdelta').classList.toggle('active', state.enablePDelta);
+            debouncedUpdate();
+        }
+
+        function toggleShear() {
+            state.enableShear = !state.enableShear;
+            document.getElementById('toggle-shear').classList.toggle('active', state.enableShear);
+            debouncedUpdate();
+        }
+
+        function toggleNonlinear() {
+            state.enableNonlinear = !state.enableNonlinear;
+            document.getElementById('toggle-nonlinear').classList.toggle('active', state.enableNonlinear);
+            debouncedUpdate();
+        }
+
+        function updateState(key, value) {
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+                state[key] = numValue;
+            } else {
+                state[key] = value;
+            }
+            updateDisplays();
+            debouncedUpdate();
+        }
+
+        function updateDisplays() {
+            // Update all display values
+            document.getElementById('display-mass').textContent = state.mass + ' kg';
+            document.getElementById('display-mass-residual').textContent = state.massResidual + ' kg';
+            document.getElementById('display-pulley-force').textContent = state.pulleyForce + ' N';
+            document.getElementById('display-pulley-y').textContent = state.pulleyY.toFixed(1) + ' m';
+            document.getElementById('display-length').textContent = state.length.toFixed(1) + ' m';
+            document.getElementById('display-penetration').textContent = state.penetration + ' cm';
+            document.getElementById('display-dist-wall').textContent = state.distWall + ' cm';
+            document.getElementById('display-height').textContent = state.height.toFixed(1) + ' cm';
+            document.getElementById('display-width').textContent = state.width.toFixed(1) + ' cm';
+            document.getElementById('display-thickness-v').textContent = state.thicknessV + ' mm';
+            document.getElementById('display-thickness-h').textContent = state.thicknessH + ' mm';
+            document.getElementById('display-fillet').textContent = state.filletRadius + ' mm';
+            document.getElementById('display-groove-width').textContent = state.grooveWidth + ' mm';
+            document.getElementById('display-groove-depth').textContent = state.grooveDepth + ' mm';
+            document.getElementById('display-insert-height').textContent = state.insertHeight.toFixed(1) + ' cm';
+            document.getElementById('display-insert-width').textContent = state.insertWidth.toFixed(1) + ' cm';
+            document.getElementById('display-temperature').textContent = state.temperature + ' °C';
+            document.getElementById('display-porosity').textContent = state.porosity + ' %';
+            document.getElementById('display-bolts').textContent = state.numBolts;
+            document.getElementById('display-scale').textContent = state.scaleFactor.toFixed(1) + 'x';
+        }
+
+        function debouncedUpdate() {
+            clearTimeout(updateTimeout);
+            updateTimeout = setTimeout(update, 16); // ~60fps max
+        }
+
+        // =====================================================
+        // MAIN UPDATE FUNCTION
+        // =====================================================
+        function update() {
+            // Run FEM solver
+            const results = solveFEM();
+            
+            // Update results display
+            updateResults(results);
+            
+            // Update canvas
+            updateCanvas();
+            
+            // Update section preview
+            updateSectionPreview();
+            
+            // Update timestamp
+            document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
+        }
+
+        function updateResults(results) {
+            // Update convergence badge
+            const badge = document.getElementById('convergence-badge');
+            if (results.converged) {
+                badge.textContent = 'CONVERGED';
+                badge.className = 'bg-green-500 text-white px-3 py-1 rounded text-xs';
+            } else {
+                badge.textContent = 'NOT CONVERGED';
+                badge.className = 'bg-red-500 text-white px-3 py-1 rounded text-xs';
+            }
+            
+            // Update solver info
+            document.getElementById('info-iterations').textContent = results.iterations;
+            document.getElementById('info-residual').textContent = results.residual.toExponential(2);
+            document.getElementById('info-time').textContent = results.time.toFixed(1);
+            
+            // Update result cards
+            document.getElementById('res-deflection').textContent = results.deflectionMax.toFixed(2);
+            document.getElementById('res-stress-beam').textContent = results.stressBeam.toFixed(1);
+            document.getElementById('res-stress-insert').textContent = results.stressInsert.toFixed(1);
+            document.getElementById('res-sf-beam').textContent = results.sfBeam.toFixed(2);
+            document.getElementById('res-sf-insert').textContent = results.sfInsert.toFixed(2);
+            document.getElementById('res-freq').textContent = results.frequency.toFixed(1);
+            document.getElementById('res-rotation').textContent = results.rotationEnd.toFixed(3);
+            document.getElementById('res-moment').textContent = results.momentMax.toFixed(1);
+            
+            // Color code based on safety factor
+            const sfBeamEl = document.getElementById('res-sf-beam');
+            const sfInsertEl = document.getElementById('res-sf-insert');
+            
+            if (results.sfBeam < 1.0) {
+                sfBeamEl.style.color = '#ef4444';
+            } else if (results.sfBeam < 1.5) {
+                sfBeamEl.style.color = '#f59e0b';
+            } else {
+                sfBeamEl.style.color = '#22c55e';
+            }
+            
+            if (results.sfInsert < 1.0) {
+                sfInsertEl.style.color = '#ef4444';
+            } else if (results.sfInsert < 1.5) {
+                sfInsertEl.style.color = '#f59e0b';
+            } else {
+                sfInsertEl.style.color = '#22c55e';
+            }
+        }
+
+        // =====================================================
+        // SVG HELPER FUNCTIONS
+        // =====================================================
+        function createSVG(tag, attrs) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (const [key, val] of Object.entries(attrs)) {
+                if (val !== undefined && val !== null) {
+                    el.setAttribute(key, val);
+                }
+            }
+            return el;
+        }
+
+        function clearLayer(layerId) {
+            const layer = document.getElementById(layerId);
+            while (layer.firstChild) {
+                layer.removeChild(layer.firstChild);
+            }
+        }
+
+        // Robust mapY function
+        function mapY(val, startY, pxPerM, scaleFactor) {
+            if (val === undefined || val === null || isNaN(val)) return startY;
+            return startY + (val * pxPerM * scaleFactor);
+        }
+
+        // =====================================================
+        // CANVAS UPDATE
+        // =====================================================
+        function updateCanvas() {
+            const canvas = document.getElementById('fem-canvas');
+            const drawingLayer = document.getElementById('drawing-layer');
+            const annotationsLayer = document.getElementById('annotations-layer');
+            
+            // Clear layers
+            clearLayer('drawing-layer');
+            clearLayer('annotations-layer');
+            
+            // Get canvas dimensions
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+            
+            // Calculate scaling
+            const margin = 80;
+            const availWidth = Math.max(100, width - 2 * margin);
+            const availHeight = Math.max(100, height - 2 * margin - 100); // Leave room for bottom
+            
+            const L = state.length;
+            const penetration = state.penetration / 100;
+            const cantileverLength = Math.max(0.1, L - penetration);
+            
+            const pxPerM = Math.max(10, Math.min(availWidth / L, availHeight / 0.5) * state.scaleFactor);
+            
+            const startX = margin + 50;
+            const startY = Math.max(100, height / 2 - 50);
+            
+            // Draw grid (static background)
+            initGrid(canvas, width, height);
+            
+            // Draw wall
+            const wallX = startX - 10;
+            const wallHeight = 200;
+            const wall = createSVG('rect', {
+                x: wallX - 30,
+                y: startY - wallHeight / 2,
+                width: 30,
+                height: wallHeight,
+                fill: '#475569',
+                stroke: '#64748b',
+                'stroke-width': 2
+            });
+            drawingLayer.appendChild(wall);
+            
+            // Draw hatch pattern on wall
+            for (let i = 0; i < 10; i++) {
+                const hatch = createSVG('line', {
+                    x1: wallX - 30 + i * 6,
+                    y1: startY - wallHeight / 2,
+                    x2: wallX - 30 + i * 6 - 20,
+                    y2: startY + wallHeight / 2,
+                    stroke: '#334155',
+                    'stroke-width': 1
+                });
+                drawingLayer.appendChild(hatch);
+            }
+            
+            // Draw insert/shoulder (in wall)
+            const insertWidth_px = (state.insertWidth / 100) * pxPerM;
+            const insertHeight_px = (state.insertHeight / 100) * pxPerM;
+            const insertX = startX;
+            const insertY = startY - insertHeight_px / 2;
+            
+            const insert = createSVG('rect', {
+                x: insertX - penetration * pxPerM,
+                y: insertY,
+                width: penetration * pxPerM,
+                height: insertHeight_px,
+                fill: 'url(#insert-gradient)',
+                stroke: '#78716c',
+                'stroke-width': 2,
+                rx: 3
+            });
+            drawingLayer.appendChild(insert);
+            
+            // Draw beam
+            const beamHeight_px = (state.height / 100) * pxPerM;
+            const nodes = solverResults.nodes;
+            
+            if (nodes && nodes.length > 1) {
+                // Draw deformed beam shape
+                const beamPath = [];
+                const topPath = [];
+                const bottomPath = [];
+                
+                for (let i = 0; i < nodes.length; i++) {
+                    const x = startX + nodes[i].x * pxPerM;
+                    const y_deformed = mapY(nodes[i].y, startY, pxPerM, state.scaleFactor * 50); // Amplify deformation
+                    
+                    // Validate coordinates
+                    if (!isFinite(x) || !isFinite(y_deformed)) continue;
+                    
+                    topPath.push({ x: x, y: y_deformed - beamHeight_px / 2 });
+                    bottomPath.push({ x: x, y: y_deformed + beamHeight_px / 2 });
+                }
+                
+                // Create closed path for beam
+                if (topPath.length > 0 && bottomPath.length > 0) {
+                    let pathD = `M ${topPath[0].x} ${topPath[0].y}`;
+                    for (let i = 1; i < topPath.length; i++) {
+                        pathD += ` L ${topPath[i].x} ${topPath[i].y}`;
+                    }
+                    for (let i = bottomPath.length - 1; i >= 0; i--) {
+                        pathD += ` L ${bottomPath[i].x} ${bottomPath[i].y}`;
+                    }
+                    pathD += ' Z';
+                    
+                    const beam = createSVG('path', {
+                        d: pathD,
+                        fill: 'url(#beam-gradient)',
+                        stroke: '#94a3b8',
+                        'stroke-width': 2
+                    });
+                    drawingLayer.appendChild(beam);
+                }
+                
+                // Draw centerline (deformed)
+                let centerlineD = '';
+                for (let i = 0; i < nodes.length; i++) {
+                    const x = startX + nodes[i].x * pxPerM;
+                    const y = mapY(nodes[i].y, startY, pxPerM, state.scaleFactor * 50);
+                    if (!isFinite(x) || !isFinite(y)) continue;
+                    centerlineD += (i === 0 ? 'M' : 'L') + ` ${x} ${y}`;
+                }
+                
+                if (centerlineD) {
+                    const centerline = createSVG('path', {
+                        d: centerlineD,
+                        fill: 'none',
+                        stroke: '#3b82f6',
+                        'stroke-width': 1,
+                        'stroke-dasharray': '5,3'
+                    });
+                    drawingLayer.appendChild(centerline);
+                }
+                
+                // Draw nodes
+                for (let i = 0; i < nodes.length; i++) {
+                    const x = startX + nodes[i].x * pxPerM;
+                    const y = mapY(nodes[i].y, startY, pxPerM, state.scaleFactor * 50);
+                    if (!isFinite(x) || !isFinite(y)) continue;
+                    
+                    if (i % 4 === 0) { // Draw every 4th node
+                        const node = createSVG('circle', {
+                            cx: x,
+                            cy: y,
+                            r: 3,
+                            fill: '#3b82f6'
+                        });
+                        drawingLayer.appendChild(node);
+                    }
+                }
+            }
+            
+            // Draw force arrow
+            if (nodes && nodes.length > 0) {
+                const tipNode = nodes[nodes.length - 1];
+                const tipX = startX + tipNode.x * pxPerM;
+                const tipY = mapY(tipNode.y, startY, pxPerM, state.scaleFactor * 50);
+                
+                if (isFinite(tipX) && isFinite(tipY)) {
+                    let forceAngle = Math.PI / 2; // Default downward
+                    let arrowLength = 60;
+                    
+                    if (state.mode === 'pulley') {
+                        // Calculate angle to pulley
+                        const pulleyX = startX + tipNode.x * pxPerM * 0.9;
+                        const pulleyY = startY - state.pulleyY * pxPerM;
+                        
+                        // Draw pulley
+                        const pulley = createSVG('circle', {
+                            cx: pulleyX,
+                            cy: pulleyY,
+                            r: 15,
+                            fill: 'none',
+                            stroke: '#94a3b8',
+                            'stroke-width': 2
+                        });
+                        drawingLayer.appendChild(pulley);
+                        
+                        const pulleyCenter = createSVG('circle', {
+                            cx: pulleyX,
+                            cy: pulleyY,
+                            r: 4,
+                            fill: '#94a3b8'
+                        });
+                        drawingLayer.appendChild(pulleyCenter);
+                        
+                        // Draw rope
+                        const rope = createSVG('line', {
+                            x1: tipX,
+                            y1: tipY,
+                            x2: pulleyX,
+                            y2: pulleyY,
+                            stroke: '#f59e0b',
+                            'stroke-width': 2,
+                            'stroke-dasharray': '4,2'
+                        });
+                        drawingLayer.appendChild(rope);
+                        
+                        // Calculate force angle
+                        const realDx = pulleyX - tipX;
+                        const realDy = pulleyY - tipY;
+                        forceAngle = Math.atan2(-realDy, realDx) + Math.PI;
+                    }
+                    
+                    // Draw force arrow
+                    const arrowEndX = tipX + arrowLength * Math.cos(forceAngle);
+                    const arrowEndY = tipY + arrowLength * Math.sin(forceAngle);
+                    
+                    const forceArrow = createSVG('line', {
+                        x1: tipX,
+                        y1: tipY,
+                        x2: arrowEndX,
+                        y2: arrowEndY,
+                        stroke: '#ef4444',
+                        'stroke-width': 3,
+                        'marker-end': 'url(#arrow-force)'
+                    });
+                    drawingLayer.appendChild(forceArrow);
+                    
+                    // Force label
+                    const F = state.mode === 'mass' ? (state.mass + state.massResidual) * 9.81 : state.pulleyForce;
+                    const forceLabel = createSVG('text', {
+                        x: arrowEndX + 10,
+                        y: arrowEndY,
+                        fill: '#ef4444',
+                        'font-size': '12px',
+                        'font-weight': 'bold'
+                    });
+                    forceLabel.textContent = `${F.toFixed(0)} N`;
+                    drawingLayer.appendChild(forceLabel);
+                }
+            }
+            
+            // Draw dimensions
+            drawDimensions(annotationsLayer, startX, startY, pxPerM);
+        }
+
+        function initGrid(canvas, width, height) {
+            const gridLayer = document.getElementById('grid-layer');
+            if (gridLayer.hasChildNodes()) return; // Only init once
+            
+            // Background
+            const bg = createSVG('rect', {
+                x: 0,
+                y: 0,
+                width: width,
+                height: height,
+                fill: '#0f172a'
+            });
+            gridLayer.appendChild(bg);
+            
+            // Grid lines
+            const gridSpacing = 50;
+            for (let x = 0; x < width; x += gridSpacing) {
+                const line = createSVG('line', {
+                    x1: x,
+                    y1: 0,
+                    x2: x,
+                    y2: height,
+                    stroke: '#1e293b',
+                    'stroke-width': 1
+                });
+                gridLayer.appendChild(line);
+            }
+            for (let y = 0; y < height; y += gridSpacing) {
+                const line = createSVG('line', {
+                    x1: 0,
+                    y1: y,
+                    x2: width,
+                    y2: y,
+                    stroke: '#1e293b',
+                    'stroke-width': 1
+                });
+                gridLayer.appendChild(line);
+            }
+        }
+
+        function drawDimensions(layer, startX, startY, pxPerM) {
+            const L = state.length;
+            const penetration = state.penetration / 100;
+            const cantileverLength = L - penetration;
+            
+            // Length dimension
+            const dimY = startY + 80;
+            
+            // Dimension line
+            const dimLine = createSVG('line', {
+                x1: startX,
+                y1: dimY,
+                x2: startX + cantileverLength * pxPerM,
+                y2: dimY,
+                stroke: '#525252',
+                'stroke-width': 1,
+                'marker-start': 'url(#arrow-sm-rev)',
+                'marker-end': 'url(#arrow-sm)'
+            });
+            layer.appendChild(dimLine);
+            
+            // Extension lines
+            const ext1 = createSVG('line', {
+                x1: startX,
+                y1: startY + 40,
+                x2: startX,
+                y2: dimY + 10,
+                stroke: '#525252',
+                'stroke-width': 0.5
+            });
+            layer.appendChild(ext1);
+            
+            const ext2 = createSVG('line', {
+                x1: startX + cantileverLength * pxPerM,
+                y1: startY + 40,
+                x2: startX + cantileverLength * pxPerM,
+                y2: dimY + 10,
+                stroke: '#525252',
+                'stroke-width': 0.5
+            });
+            layer.appendChild(ext2);
+            
+            // Label
+            const labelX = startX + cantileverLength * pxPerM / 2;
+            const dimLabel = createSVG('text', {
+                x: labelX,
+                y: dimY - 5,
+                fill: '#94a3b8',
+                'font-size': '11px',
+                'text-anchor': 'middle'
+            });
+            
+            const originalValue = cantileverLength * 100; // cm
+            const scaledValue = originalValue * state.scaleFactor;
+            if (Math.abs(state.scaleFactor - 1.0) > 0.01) {
+                dimLabel.textContent = `${originalValue.toFixed(1)} → ${scaledValue.toFixed(1)} cm`;
+            } else {
+                dimLabel.textContent = `${originalValue.toFixed(1)} cm`;
+            }
+            layer.appendChild(dimLabel);
+            
+            // Deflection indicator
+            if (solverResults.deflectionMax > 0) {
+                const defY = startY - 60;
+                const defLabel = createSVG('text', {
+                    x: startX + cantileverLength * pxPerM + 20,
+                    y: defY,
+                    fill: '#3b82f6',
+                    'font-size': '11px'
+                });
+                defLabel.textContent = `δ = ${solverResults.deflectionMax.toFixed(2)} mm`;
+                layer.appendChild(defLabel);
+            }
+        }
+
+        // =====================================================
+        // SECTION PREVIEW
+        // =====================================================
+        function updateSectionPreview() {
+            const svg = document.getElementById('section-preview');
+            svg.innerHTML = '';
+            
+            const viewBox = svg.viewBox.baseVal;
+            const cx = viewBox.width / 2;
+            const cy = viewBox.height / 2;
+            const viewScale = 3; // pixels per mm
+            
+            if (state.previewMode === 'beam') {
+                drawBeamSection(svg, cx, cy, viewScale);
+            } else {
+                drawInsertSection(svg, cx, cy, viewScale);
+            }
+        }
+
+        function drawBeamSection(svg, cx, cy, viewScale) {
+            const H_mm = state.height * 10; // Convert cm to mm
+            const W_mm = state.width * 10;
+            const Sv_mm = state.thicknessV;
+            const Sh_mm = state.thicknessH;
+            const filletR = state.filletRadius;
+            
+            const H_px = H_mm * viewScale;
+            const W_px = W_mm * viewScale;
+            const Sv_px = Sv_mm * viewScale;
+            const Sh_px = Sh_mm * viewScale;
+            const fR_px = filletR * viewScale;
+            
+            // Outer path
+            let outerPath = '';
+            
+            switch(state.beamShape) {
+                case 'rect':
+                case 'hollow':
+                    outerPath = createRectPath(cx, cy, W_px, H_px, fR_px);
+                    break;
+                case 'aero':
+                    outerPath = createAeroPath(cx, cy, W_px, H_px);
+                    break;
+                case 'oval':
+                    outerPath = createOvalPath(cx, cy, W_px, H_px);
+                    break;
+                case 'power':
+                    outerPath = createPowerPath(cx, cy, W_px, H_px);
+                    break;
+                case 'ibeam':
+                    drawIBeamSection(svg, cx, cy, W_px, H_px, Sv_px, Sh_px, fR_px);
+                    return;
+                case 'cChannel':
+                    drawCChannelSection(svg, cx, cy, W_px, H_px, Sv_px, Sh_px, fR_px);
+                    return;
+                case 'xRib':
+                    drawXRibSection(svg, cx, cy, W_px, H_px, Sv_px, Sh_px);
+                    return;
+                default:
+                    outerPath = createRectPath(cx, cy, W_px, H_px, fR_px);
+            }
+            
+            // Draw outer shape
+            const outer = createSVG('path', {
+                d: outerPath,
+                fill: '#64748b',
+                stroke: '#94a3b8',
+                'stroke-width': 1
+            });
+            svg.appendChild(outer);
+            
+            // Inner path (hollow)
+            if (state.beamShape !== 'rect' || Sv_mm > 0) {
+                const innerW = W_px - 2 * Sh_px;
+                const innerH = H_px - 2 * Sv_px;
+                
+                if (innerW > 0 && innerH > 0) {
+                    let innerPath = '';
+                    
+                    // Calculate inner positions
+                    const ixL = cx - innerW / 2;
+                    const ixR = cx + innerW / 2;
+                    const iyT = cy - innerH / 2;
+                    const iyB = cy + innerH / 2;
+                    const innerFilletR = Math.max(0, fR_px - Math.min(Sh_px, Sv_px));
+                    
+                    // LED groove handling
+                    if (state.ledGroove) {
+                        const grooveW_px = state.grooveWidth * viewScale;
+                        const grooveH_px = state.grooveDepth * viewScale;
+                        const grooveLeft = cx - grooveW_px / 2;
+                        const grooveRight = cx + grooveW_px / 2;
+                        const outerTop = cy - H_px / 2;
+                        const grooveBottom = outerTop + grooveH_px;
+                        
+                        // Draw groove cutout on top
+                        const groovePath = `M ${grooveLeft} ${outerTop} 
+                            L ${grooveLeft} ${grooveBottom} 
+                            L ${grooveRight} ${grooveBottom} 
+                            L ${grooveRight} ${outerTop} Z`;
+                        
+                        const groove = createSVG('path', {
+                            d: groovePath,
+                            fill: '#0f172a',
+                            stroke: '#334155',
+                            'stroke-width': 0.5
+                        });
+                        svg.appendChild(groove);
+                        
+                        // Adjust inner path to account for groove
+                        const safeInnerH = innerH - grooveH_px;
+                        if (safeInnerH > 0) {
+                            innerPath = createRectPath(cx, cy + grooveH_px / 2, innerW, safeInnerH, innerFilletR);
+                        }
+                    } else {
+                        if (state.beamShape === 'aero') {
+                            innerPath = createAeroPath(cx, cy, innerW, innerH);
+                        } else if (state.beamShape === 'oval') {
+                            innerPath = createOvalPath(cx, cy, innerW, innerH);
+                        } else if (state.beamShape === 'power') {
+                            innerPath = createPowerPath(cx, cy, innerW, innerH);
+                        } else {
+                            innerPath = createRectPath(cx, cy, innerW, innerH, innerFilletR);
+                        }
+                    }
+                    
+                    if (innerPath) {
+                        const inner = createSVG('path', {
+                            d: innerPath,
+                            fill: '#0f172a',
+                            stroke: '#334155',
+                            'stroke-width': 0.5
+                        });
+                        svg.appendChild(inner);
+                    }
+                }
+            }
+            
+            // Draw LED groove on top (without inner hollow)
+            if (state.ledGroove && state.beamShape === 'rect') {
+                const grooveW_px = state.grooveWidth * viewScale;
+                const grooveH_px = state.grooveDepth * viewScale;
+                const grooveLeft = cx - grooveW_px / 2;
+                const grooveRight = cx + grooveW_px / 2;
+                const outerTop = cy - H_px / 2;
+                const grooveBottom = outerTop + grooveH_px;
+                
+                const groovePath = `M ${grooveLeft} ${outerTop} 
+                    L ${grooveLeft} ${grooveBottom} 
+                    L ${grooveRight} ${grooveBottom} 
+                    L ${grooveRight} ${outerTop} Z`;
+                
+                const groove = createSVG('path', {
+                    d: groovePath,
+                    fill: '#0f172a',
+                    stroke: '#334155',
+                    'stroke-width': 0.5
+                });
+                svg.appendChild(groove);
+            }
+            
+            // Center crosshair
+            drawCrosshair(svg, cx, cy);
+        }
+
+        function createRectPath(cx, cy, w, h, r) {
+            const left = cx - w / 2;
+            const right = cx + w / 2;
+            const top = cy - h / 2;
+            const bottom = cy + h / 2;
+            r = Math.min(r, w / 2, h / 2);
+            
+            if (r > 0) {
+                return `M ${left + r} ${top}
+                    L ${right - r} ${top}
+                    Q ${right} ${top} ${right} ${top + r}
+                    L ${right} ${bottom - r}
+                    Q ${right} ${bottom} ${right - r} ${bottom}
+                    L ${left + r} ${bottom}
+                    Q ${left} ${bottom} ${left} ${bottom - r}
+                    L ${left} ${top + r}
+                    Q ${left} ${top} ${left + r} ${top}
+                    Z`;
+            } else {
+                return `M ${left} ${top} L ${right} ${top} L ${right} ${bottom} L ${left} ${bottom} Z`;
+            }
+        }
+
+        function createAeroPath(cx, cy, w, h) {
+            const bow = w * 0.15;
+            const left = cx - w / 2;
+            const right = cx + w / 2;
+            const top = cy - h / 2;
+            const bottom = cy + h / 2;
+            
+            return `M ${left} ${cy}
+                Q ${left + bow} ${top} ${cx} ${top}
+                Q ${right - bow} ${top} ${right} ${cy}
+                Q ${right - bow} ${bottom} ${cx} ${bottom}
+                Q ${left + bow} ${bottom} ${left} ${cy}
+                Z`;
+        }
+
+        function createOvalPath(cx, cy, w, h) {
+            const rx = w / 2;
+            const ry = h / 2;
+            return `M ${cx - rx} ${cy}
+                A ${rx} ${ry} 0 1 1 ${cx + rx} ${cy}
+                A ${rx} ${ry} 0 1 1 ${cx - rx} ${cy}
+                Z`;
+        }
+
+        function createPowerPath(cx, cy, w, h) {
+            const maxChamfer = Math.min(w, h) * 0.4;
+            const chamfer = Math.min(w * 0.2, h * 0.2, maxChamfer);
+            const left = cx - w / 2;
+            const right = cx + w / 2;
+            const top = cy - h / 2;
+            const bottom = cy + h / 2;
+            
+            return `M ${left + chamfer} ${top}
+                L ${right - chamfer} ${top}
+                L ${right} ${top + chamfer}
+                L ${right} ${bottom - chamfer}
+                L ${right - chamfer} ${bottom}
+                L ${left + chamfer} ${bottom}
+                L ${left} ${bottom - chamfer}
+                L ${left} ${top + chamfer}
+                Z`;
+        }
+
+        function drawIBeamSection(svg, cx, cy, W_px, H_px, Sv_px, Sh_px, fR_px) {
+            // Draw I-beam as three rectangles: top flange, web, bottom flange
+            const webWidth = Sh_px;
+            const flangeHeight = Sv_px;
+            const webHeight = H_px - 2 * flangeHeight;
+            
+            // Top flange
+            const topFlange = createSVG('rect', {
+                x: cx - W_px / 2,
+                y: cy - H_px / 2,
+                width: W_px,
+                height: flangeHeight,
+                fill: '#64748b',
+                stroke: '#94a3b8',
+                'stroke-width': 1
+            });
+            svg.appendChild(topFlange);
+            
+            // Bottom flange
+            const bottomFlange = createSVG('rect', {
+                x: cx - W_px / 2,
+                y: cy + H_px / 2 - flangeHeight,
+                width: W_px,
+                height: flangeHeight,
+                fill: '#64748b',
+                stroke: '#94a3b8',
+                'stroke-width': 1
+            });
+            svg.appendChild(bottomFlange);
+            
+            // Web
+            const web = createSVG('rect', {
+                x: cx - webWidth / 2,
+                y: cy - H_px / 2 + flangeHeight,
+                width: webWidth,
+                height: webHeight,
+                fill: '#64748b',
+                stroke: '#94a3b8',
+                'stroke-width': 1
+            });
+            svg.appendChild(web);
+            
+            // Fillets at connections
+            if (fR_px > 0) {
+                const filletSize = Math.min(fR_px, (W_px - webWidth) / 4, webHeight / 4);
+                // Top left fillet
+                drawFillet(svg, cx - webWidth / 2, cy - H_px / 2 + flangeHeight, filletSize, 'tl');
+                // Top right fillet
+                drawFillet(svg, cx + webWidth / 2, cy - H_px / 2 + flangeHeight, filletSize, 'tr');
+                // Bottom left fillet
+                drawFillet(svg, cx - webWidth / 2, cy + H_px / 2 - flangeHeight, filletSize, 'bl');
+                // Bottom right fillet
+                drawFillet(svg, cx + webWidth / 2, cy + H_px / 2 - flangeHeight, filletSize, 'br');
+            }
+            
+            drawCrosshair(svg, cx, cy);
+        }
+
+        function drawFillet(svg, x, y, r, position) {
+            let path = '';
+            switch (position) {
+                case 'tl':
+                    path = `M ${x} ${y} L ${x - r} ${y} Q ${x} ${y} ${x} ${y + r} Z`;
+                    break;
+                case 'tr':
+                    path = `M ${x} ${y} L ${x + r} ${y} Q ${x} ${y} ${x} ${y + r} Z`;
+                    break;
+                case 'bl':
+                    path = `M ${x} ${y} L ${x - r} ${y} Q ${x} ${y} ${x} ${y - r} Z`;
+                    break;
+                case 'br':
+                    path = `M ${x} ${y} L ${x + r} ${y} Q ${x} ${y} ${x} ${y - r} Z`;
+                    break;
+            }
+            
+            const fillet = createSVG('path', {
+                d: path,
+                fill: '#64748b',
+                stroke: 'none'
+            });
+            svg.appendChild(fillet);
+        }
+
+        function drawCChannelSection(svg, cx, cy, W_px, H_px, Sv_px, Sh_px, fR_px) {
+            // C-Channel: open on one side
+            const flangeHeight = Sv_px;
+            const webWidth = Sh_px;
+            
+            // Main path for C-channel
+            const left = cx - W_px / 2;
+            const right = cx + W_px / 2;
+            const top = cy - H_px / 2;
+            const bottom = cy + H_px / 2;
+            
+            // Outer C shape
+            const outerPath = `M ${right} ${top}
+                L ${left} ${top}
+                L ${left} ${bottom}
+                L ${right} ${bottom}
+                L ${right} ${bottom - flangeHeight}
+                L ${left + webWidth} ${bottom - flangeHeight}
+                L ${left + webWidth} ${top + flangeHeight}
+                L ${right} ${top + flangeHeight}
+                Z`;
+            
+            const channel = createSVG('path', {
+                d: outerPath,
+                fill: '#64748b',
+                stroke: '#94a3b8',
+                'stroke-width': 1
+            });
+            svg.appendChild(channel);
+            
+            drawCrosshair(svg, cx, cy);
+        }
+
+        function drawXRibSection(svg, cx, cy, W_px, H_px, Sv_px, Sh_px) {
+            // Outer rectangle
+            const outer = createSVG('rect', {
+                x: cx - W_px / 2,
+                y: cy - H_px / 2,
+                width: W_px,
+                height: H_px,
+                fill: 'none',
+                stroke: '#94a3b8',
+                'stroke-width': 2
+            });
+            svg.appendChild(outer);
+            
+            // Walls
+            const wallThickness = Math.min(Sv_px, Sh_px);
+            
+            // Top wall
+            const topWall = createSVG('rect', {
+                x: cx - W_px / 2,
+                y: cy - H_px / 2,
+                width: W_px,
+                height: wallThickness,
+                fill: '#64748b'
+            });
+            svg.appendChild(topWall);
+            
+            // Bottom wall
+            const bottomWall = createSVG('rect', {
+                x: cx - W_px / 2,
+                y: cy + H_px / 2 - wallThickness,
+                width: W_px,
+                height: wallThickness,
+                fill: '#64748b'
+            });
+            svg.appendChild(bottomWall);
+            
+            // Left wall
+            const leftWall = createSVG('rect', {
+                x: cx - W_px / 2,
+                y: cy - H_px / 2,
+                width: wallThickness,
+                height: H_px,
+                fill: '#64748b'
+            });
+            svg.appendChild(leftWall);
+            
+            // Right wall
+            const rightWall = createSVG('rect', {
+                x: cx + W_px / 2 - wallThickness,
+                y: cy - H_px / 2,
+                width: wallThickness,
+                height: H_px,
+                fill: '#64748b'
+            });
+            svg.appendChild(rightWall);
+            
+            // X ribs - 4 triangles forming an X
+            const innerLeft = cx - W_px / 2 + wallThickness;
+            const innerRight = cx + W_px / 2 - wallThickness;
+            const innerTop = cy - H_px / 2 + wallThickness;
+            const innerBottom = cy + H_px / 2 - wallThickness;
+            const ribThickness = wallThickness * 0.6;
+            
+            // Diagonal 1 (top-left to bottom-right)
+            const diag1 = createSVG('line', {
+                x1: innerLeft,
+                y1: innerTop,
+                x2: innerRight,
+                y2: innerBottom,
+                stroke: '#64748b',
+                'stroke-width': ribThickness
+            });
+            svg.appendChild(diag1);
+            
+            // Diagonal 2 (top-right to bottom-left)
+            const diag2 = createSVG('line', {
+                x1: innerRight,
+                y1: innerTop,
+                x2: innerLeft,
+                y2: innerBottom,
+                stroke: '#64748b',
+                'stroke-width': ribThickness
+            });
+            svg.appendChild(diag2);
+            
+            drawCrosshair(svg, cx, cy);
+        }
+
+        function drawCrosshair(svg, cx, cy) {
+            const size = 6;
+            const h = createSVG('line', {
+                x1: cx - size,
+                y1: cy,
+                x2: cx + size,
+                y2: cy,
+                stroke: '#ef4444',
+                'stroke-width': 0.5
+            });
+            svg.appendChild(h);
+            
+            const v = createSVG('line', {
+                x1: cx,
+                y1: cy - size,
+                x2: cx,
+                y2: cy + size,
+                stroke: '#ef4444',
+                'stroke-width': 0.5
+            });
+            svg.appendChild(v);
+        }
+
+        function drawInsertSection(svg, cx, cy, viewScale) {
+            const H_mm = state.insertHeight * 10;
+            const W_mm = state.insertWidth * 10;
+            
+            const H_px = H_mm * viewScale;
+            const W_px = W_mm * viewScale;
+            
+            // Draw insert based on shape
+            switch (state.insertShape) {
+                case 'solid':
+                    const solid = createSVG('rect', {
+                        x: cx - W_px / 2,
+                        y: cy - H_px / 2,
+                        width: W_px,
+                        height: H_px,
+                        fill: '#78716c',
+                        stroke: '#a8a29e',
+                        'stroke-width': 1,
+                        rx: 3
+                    });
+                    svg.appendChild(solid);
+                    break;
+                    
+                case 'hollow':
+                    const wallT = state.insertWallT * viewScale;
+                    const outerRect = createSVG('rect', {
+                        x: cx - W_px / 2,
+                        y: cy - H_px / 2,
+                        width: W_px,
+                        height: H_px,
+                        fill: '#78716c',
+                        stroke: '#a8a29e',
+                        'stroke-width': 1
+                    });
+                    svg.appendChild(outerRect);
+                    
+                    const innerW = W_px - 2 * wallT;
+                    const innerH = H_px - 2 * wallT;
+                    if (innerW > 0 && innerH > 0) {
+                        const innerRect = createSVG('rect', {
+                            x: cx - innerW / 2,
+                            y: cy - innerH / 2,
+                            width: innerW,
+                            height: innerH,
+                            fill: '#0f172a',
+                            stroke: '#334155',
+                            'stroke-width': 0.5
+                        });
+                        svg.appendChild(innerRect);
+                    }
+                    break;
+                    
+                case 'ibeam':
+                    const flangeT = (state.insertFlangeT || 8) * viewScale;
+                    const webT = (state.insertWebT || 6) * viewScale;
+                    drawIBeamSection(svg, cx, cy, W_px, H_px, flangeT, webT, 0);
+                    return;
+            }
+            
+            // LED groove notch on insert (if beam has LED groove)
+            if (state.ledGroove) {
+                const grooveW_px = (state.grooveWidth + 2) * viewScale; // +2mm margin
+                const grooveH_px = (state.grooveDepth + 2) * viewScale;
+                const grooveLeft = cx - grooveW_px / 2;
+                const outerTop = cy - H_px / 2;
+                
+                const notch = createSVG('rect', {
+                    x: grooveLeft,
+                    y: outerTop,
+                    width: grooveW_px,
+                    height: grooveH_px,
+                    fill: '#0f172a',
+                    stroke: '#334155',
+                    'stroke-width': 0.5
+                });
+                svg.appendChild(notch);
+            }
+            
+            drawCrosshair(svg, cx, cy);
+        }
+
+        // =====================================================
+        // INITIALIZATION
+        // =====================================================
+        function init() {
+            // Set initial toggle states
+            document.getElementById('toggle-pdelta').classList.add('active');
+            document.getElementById('toggle-nonlinear').classList.add('active');
+            document.getElementById('toggle-autofit').classList.add('active');
+            
+            // Initial update
+            updateDisplays();
+            update();
+            
+            // Resize handler
+            window.addEventListener('resize', () => {
+                clearLayer('grid-layer');
+                debouncedUpdate();
+            });
+            
+            console.log('Simulatore Bracci Gibus V6.0 - Inizializzato');
+        }
+
+        // Start when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
