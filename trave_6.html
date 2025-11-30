@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore bracci Gibus SpA - V6.0 Advanced FEM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --gibus-red: #dc2626;
+            --gibus-yellow: #FFD100;
+            --gibus-black: #1a1a1a;
+        }
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .sidebar { width: 320px; min-width: 320px; }
+        .slider-label { font-size: 0.75rem; color: #666; }
+        .result-box { background: #f8f9fa; border-radius: 8px; padding: 12px; }
+        .stress-ok { background: #22c55e; }
+        .stress-warn { background: #eab308; }
+        .stress-critical { background: #f97316; }
+        .stress-fail { background: #dc2626; }
+        input[type="range"] { width: 100%; }
+        select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+        .control-group { margin-bottom: 12px; }
+        .control-group label { display: block; font-size: 0.8rem; font-weight: 500; margin-bottom: 4px; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+    <!-- Header -->
+    <header class="bg-red-600 text-white px-6 py-3 flex items-center justify-between shadow-lg">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold">GIBUS SpA</h1>
+            <span class="text-sm opacity-80">Simulatore Bracci Estensibili</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="statusBadge" class="px-3 py-1 rounded-full text-sm font-semibold bg-green-500">OK</span>
+            <span class="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-bold">V6.0 Advanced FEM</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Left Sidebar - Controls -->
+        <aside class="sidebar bg-white shadow-lg p-4 overflow-y-auto">
+            <h2 class="text-lg font-bold mb-4 text-gray-800"><i class="fas fa-sliders-h mr-2"></i>Controlli</h2>
+            
+            <!-- Load Section -->
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-weight-hanging mr-1"></i>Carico</h3>
+                <div class="control-group">
+                    <label>Modalità carico</label>
+                    <select id="modeSelect">
+                        <option value="mass">Massa distribuita</option>
+                        <option value="pulley">Forza puleggia</option>
+                    </select>
+                </div>
+                <div class="control-group" id="massControl">
+                    <label>Massa: <span id="massValue">50</span> kg</label>
+                    <input type="range" id="massSlider" min="1" max="300" value="50">
+                </div>
+                <div class="control-group hidden" id="pulleyControl">
+                    <label>Forza puleggia: <span id="pulleyValue">500</span> N</label>
+                    <input type="range" id="pulleySlider" min="100" max="2000" value="500">
+                </div>
+            </div>
+
+            <!-- Materials Section -->
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-cube mr-1"></i>Materiali</h3>
+                <div class="control-group">
+                    <label>Materiale trave</label>
+                    <select id="beamMatSelect"></select>
+                </div>
+                <div class="control-group">
+                    <label>Materiale inserto</label>
+                    <select id="insertMatSelect"></select>
+                </div>
+            </div>
+
+            <!-- Geometry Section -->
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-ruler-combined mr-1"></i>Geometria</h3>
+                <div class="control-group">
+                    <label>Lunghezza: <span id="lengthValue">2.0</span> m</label>
+                    <input type="range" id="lengthSlider" min="0.5" max="5" step="0.1" value="2">
+                </div>
+                <div class="control-group">
+                    <label>Altezza H: <span id="heightValue">62</span> mm</label>
+                    <input type="range" id="heightSlider" min="30" max="120" value="62">
+                </div>
+                <div class="control-group">
+                    <label>Larghezza W: <span id="widthValue">33</span> mm</label>
+                    <input type="range" id="widthSlider" min="20" max="80" value="33">
+                </div>
+                <div class="control-group">
+                    <label>Spessore V: <span id="thicknessVValue">3.0</span> mm</label>
+                    <input type="range" id="thicknessVSlider" min="1" max="8" step="0.5" value="3">
+                </div>
+                <div class="control-group">
+                    <label>Spessore H: <span id="thicknessHValue">3.0</span> mm</label>
+                    <input type="range" id="thicknessHSlider" min="1" max="8" step="0.5" value="3">
+                </div>
+                <div class="control-group">
+                    <label>Raggio raccordo: <span id="filletValue">4.0</span> mm</label>
+                    <input type="range" id="filletSlider" min="0" max="10" step="0.5" value="4">
+                </div>
+                <div class="control-group">
+                    <label>Forma profilo</label>
+                    <select id="beamShapeSelect">
+                        <option value="rect">Rettangolare</option>
+                        <option value="aero">Aerodinamico</option>
+                        <option value="oval">Ovale</option>
+                        <option value="power">Power</option>
+                    </select>
+                </div>
+                <div class="control-group flex items-center gap-2">
+                    <input type="checkbox" id="ledGrooveCheck">
+                    <label class="!mb-0">Cava LED integrata</label>
+                </div>
+            </div>
+
+            <!-- Insert Section -->
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-plug mr-1"></i>Inserto</h3>
+                <div class="control-group">
+                    <label>Altezza inserto: <span id="insertHeightValue">94</span> mm</label>
+                    <input type="range" id="insertHeightSlider" min="50" max="150" value="94">
+                </div>
+                <div class="control-group">
+                    <label>Larghezza inserto: <span id="insertWidthValue">44</span> mm</label>
+                    <input type="range" id="insertWidthSlider" min="30" max="100" value="44">
+                </div>
+                <div class="control-group">
+                    <label>Forma inserto</label>
+                    <select id="insertShapeSelect">
+                        <option value="solid">Solido</option>
+                        <option value="hollow">Cavo</option>
+                        <option value="ibeam">Doppio T</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Temperature Section -->
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-thermometer-half mr-1"></i>Temperatura</h3>
+                <div class="control-group">
+                    <label>Temperatura: <span id="tempValue">20</span> °C</label>
+                    <input type="range" id="tempSlider" min="-30" max="80" value="20">
+                </div>
+            </div>
+
+            <!-- Solver Options -->
+            <div class="bg-gray-50 rounded-lg p-3 mb-4">
+                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-cogs mr-1"></i>Solutore FEM</h3>
+                <div class="control-group">
+                    <label>Elementi FEM: <span id="elementsValue">100</span></label>
+                    <input type="range" id="elementsSlider" min="20" max="200" value="100">
+                </div>
+                <div class="control-group">
+                    <label>Fattore scala: <span id="scaleValue">1.0</span>x</label>
+                    <input type="range" id="scaleSlider" min="0.1" max="5" step="0.1" value="1">
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Canvas Area -->
+        <main class="flex-1 flex flex-col bg-gray-200 overflow-hidden">
+            <!-- SVG Canvas -->
+            <div class="flex-1 p-4 overflow-hidden">
+                <div class="bg-white rounded-lg shadow-lg h-full p-4 overflow-hidden">
+                    <svg id="beamCanvas" class="w-full h-full" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="stressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:#22c55e"/>
+                                <stop offset="50%" style="stop-color:#eab308"/>
+                                <stop offset="100%" style="stop-color:#dc2626"/>
+                            </linearGradient>
+                            <pattern id="wallPattern" patternUnits="userSpaceOnUse" width="10" height="10">
+                                <line x1="0" y1="10" x2="10" y2="0" stroke="#666" stroke-width="1"/>
+                            </pattern>
+                        </defs>
+                        <g id="beamGroup"></g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="bg-white shadow-lg p-4 border-t">
+                <div class="grid grid-cols-6 gap-4">
+                    <div class="result-box text-center">
+                        <div class="text-xs text-gray-500 mb-1">Stress Max</div>
+                        <div class="text-xl font-bold text-red-600" id="stressResult">0.0</div>
+                        <div class="text-xs text-gray-400">MPa</div>
+                    </div>
+                    <div class="result-box text-center">
+                        <div class="text-xs text-gray-500 mb-1">Deflessione</div>
+                        <div class="text-xl font-bold text-blue-600" id="deflectionResult">0.0</div>
+                        <div class="text-xs text-gray-400">mm</div>
+                    </div>
+                    <div class="result-box text-center">
+                        <div class="text-xs text-gray-500 mb-1">Inerzia Trave</div>
+                        <div class="text-xl font-bold text-purple-600" id="inertiaResult">0.0</div>
+                        <div class="text-xs text-gray-400">cm⁴</div>
+                    </div>
+                    <div class="result-box text-center">
+                        <div class="text-xs text-gray-500 mb-1">Inerzia Inserto</div>
+                        <div class="text-xl font-bold text-indigo-600" id="insertInertiaResult">0.0</div>
+                        <div class="text-xs text-gray-400">cm⁴</div>
+                    </div>
+                    <div class="result-box text-center">
+                        <div class="text-xs text-gray-500 mb-1">Iterazioni N-R</div>
+                        <div class="text-xl font-bold text-green-600" id="iterationsResult">0</div>
+                        <div class="text-xs text-gray-400">iter</div>
+                    </div>
+                    <div class="result-box text-center">
+                        <div class="text-xs text-gray-500 mb-1">Tempo calcolo</div>
+                        <div class="text-xl font-bold text-orange-600" id="timeResult">0.0</div>
+                        <div class="text-xs text-gray-400">ms</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar - Section Preview -->
+        <aside class="sidebar bg-white shadow-lg p-4 overflow-y-auto">
+            <h2 class="text-lg font-bold mb-4 text-gray-800"><i class="fas fa-eye mr-2"></i>Sezione Trasversale</h2>
+            <div class="bg-gray-100 rounded-lg p-2 mb-4">
+                <svg id="sectionPreview" class="w-full" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+                    <g id="sectionGroup"></g>
+                </svg>
+            </div>
+            <div class="control-group">
+                <label>Anteprima</label>
+                <select id="previewModeSelect">
+                    <option value="beam">Trave</option>
+                    <option value="insert">Inserto</option>
+                </select>
+            </div>
+            
+            <!-- Section Properties -->
+            <div class="bg-gray-50 rounded-lg p-3 mt-4">
+                <h3 class="font-semibold text-sm text-gray-700 mb-2">Proprietà sezione</h3>
+                <div class="text-xs space-y-1">
+                    <div class="flex justify-between"><span>Area:</span><span id="areaDisplay">0.0 mm²</span></div>
+                    <div class="flex justify-between"><span>I_xx:</span><span id="ixxDisplay">0.0 cm⁴</span></div>
+                    <div class="flex justify-between"><span>I_yy:</span><span id="iyyDisplay">0.0 cm⁴</span></div>
+                    <div class="flex justify-between"><span>W_x:</span><span id="wxDisplay">0.0 cm³</span></div>
+                </div>
+            </div>
+
+            <!-- Stress Scale -->
+            <div class="bg-gray-50 rounded-lg p-3 mt-4">
+                <h3 class="font-semibold text-sm text-gray-700 mb-2">Scala stress</h3>
+                <div class="h-4 rounded" style="background: linear-gradient(to right, #22c55e, #eab308, #dc2626)"></div>
+                <div class="flex justify-between text-xs mt-1">
+                    <span>0%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                </div>
+            </div>
+
+            <!-- Material Info -->
+            <div class="bg-gray-50 rounded-lg p-3 mt-4">
+                <h3 class="font-semibold text-sm text-gray-700 mb-2">Info materiale</h3>
+                <div class="text-xs space-y-1" id="materialInfo">
+                    <div class="flex justify-between"><span>E:</span><span id="matE">70.0 GPa</span></div>
+                    <div class="flex justify-between"><span>σ_y:</span><span id="matYield">240 MPa</span></div>
+                    <div class="flex justify-between"><span>σ_u:</span><span id="matTensile">290 MPa</span></div>
+                    <div class="flex justify-between"><span>n (R-O):</span><span id="matN">20</span></div>
+                    <div class="flex justify-between"><span>k_E (T):</span><span id="matKE">1.000</span></div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+    // ==================== MATERIALS DATABASE ====================
+    const MATERIALS = {
+        '6060-T6': { E: 69.0, G: 26.0, yield: 150, tensile: 190, n_RO: 25, name: "6060 T6" },
+        '6061-T6': { E: 70.0, G: 26.5, yield: 240, tensile: 290, n_RO: 20, name: "6061 T6" },
+        '6063-T6': { E: 69.5, G: 26.2, yield: 170, tensile: 215, n_RO: 22, name: "6063 T6" },
+        '6082-T6': { E: 70.5, G: 26.7, yield: 260, tensile: 310, n_RO: 18, name: "6082 T6" },
+        '7075-T6': { E: 71.7, G: 27.0, yield: 505, tensile: 570, n_RO: 12, name: "7075 T6 (Ergal)" },
+        '2024-T3': { E: 73.1, G: 27.5, yield: 345, tensile: 480, n_RO: 15, name: "2024 T3 (Avional)" },
+        '46100-F': { E: 71.0, G: 26.5, yield: 140, tensile: 240, n_RO: 30, name: "EN AB 46100" },
+        '46000-F': { E: 72.0, G: 27.0, yield: 140, tensile: 240, n_RO: 28, name: "EN AB 46000" },
+        '47100-F': { E: 75.0, G: 28.0, yield: 150, tensile: 260, n_RO: 25, name: "EN AB 47100" },
+        'ZA-27':   { E: 78.0, G: 29.0, yield: 370, tensile: 400, n_RO: 15, name: "Zamak 27" },
+        '42100-T6': { E: 71.0, G: 26.5, yield: 210, tensile: 290, n_RO: 20, name: "EN AB 42100 T6" },
+        '6082-CNC': { E: 70.0, G: 26.5, yield: 260, tensile: 310, n_RO: 18, name: "6082 T6 (CNC)" },
+        '7075-CNC': { E: 71.7, G: 27.0, yield: 500, tensile: 570, n_RO: 12, name: "7075 T6 (CNC)" },
+    };
+
+    // ==================== EN 1999-1-2 TEMPERATURE FACTORS ====================
+    const TEMP_FACTORS_EN1999 = {
+        '-30': [1.02, 1.05, 1.03],
+        '20':  [1.000, 1.000, 1.000],
+        '100': [0.990, 0.980, 0.990],
+        '150': [0.950, 0.900, 0.950],
+        '200': [0.900, 0.800, 0.880],
+        '250': [0.850, 0.650, 0.780],
+        '300': [0.750, 0.500, 0.650],
+        '350': [0.600, 0.350, 0.500],
+    };
+
+    // ==================== SHEAR CORRECTION FACTORS (Timoshenko) ====================
+    const SHEAR_FACTORS = {
+        rect: 5/6,
+        hollow: 0.5,
+        ibeam: 0.44,
+        aero: 0.6,
+        oval: 0.7,
+        power: 0.55,
+        solid: 5/6
+    };
+
+    // ==================== APPLICATION STATE ====================
+    const state = {
+        mode: 'mass', mass: 50, massResidual: 0, pulleyForce: 500, pulleyY: 1.0,
+        length: 2, penetration: 30, distWall: 10, height: 6.2, width: 3.3,
+        thicknessV: 3, thicknessH: 3, insertHeight: 9.4, insertWidth: 4.4,
+        numBolts: 3, beamMatKey: '6061-T6', insertMatKey: '46100-F',
+        porosity: 0, scaleFactor: 1, previewMode: 'beam', beamShape: 'rect',
+        insertShape: 'solid', autoFit: true, filletRadius: 4.0, ledGroove: false,
+        temperature: 20, numElements: 100
+    };
+
+    // ==================== TEMPERATURE INTERPOLATION (EN 1999) ====================
+    function getTemperatureFactors(T) {
+        const temps = Object.keys(TEMP_FACTORS_EN1999).map(Number).sort((a, b) => a - b);
+        
+        if (T <= temps[0]) return TEMP_FACTORS_EN1999[temps[0].toString()].slice();
+        if (T >= temps[temps.length - 1]) return TEMP_FACTORS_EN1999[temps[temps.length - 1].toString()].slice();
+        
+        let i = 0;
+        while (i < temps.length - 1 && temps[i + 1] < T) i++;
+        
+        const T1 = temps[i], T2 = temps[i + 1];
+        const f1 = TEMP_FACTORS_EN1999[T1.toString()];
+        const f2 = TEMP_FACTORS_EN1999[T2.toString()];
+        const ratio = (T - T1) / (T2 - T1);
+        
+        return [
+            f1[0] + ratio * (f2[0] - f1[0]),
+            f1[1] + ratio * (f2[1] - f1[1]),
+            f1[2] + ratio * (f2[2] - f1[2])
+        ];
+    }
+
+    // ==================== RAMBERG-OSGOOD TANGENT MODULUS ====================
+    function getTangentModulus(stress, E, sigma_y, n) {
+        if (stress <= 0) return E * 1e9;
+        const stressAbs = Math.abs(stress) * 1e6; // Convert to Pa
+        const E_Pa = E * 1e9;
+        const sigma_y_Pa = sigma_y * 1e6;
+        
+        const ratio = stressAbs / sigma_y_Pa;
+        const denom = 1/E_Pa + 0.002 * n * Math.pow(ratio, n - 1) / sigma_y_Pa;
+        
+        return Math.max(E_Pa * 0.01, 1 / denom); // Minimum 1% of E
+    }
+
+    // ==================== SECTION PROPERTIES ====================
+    function calculateSectionProperties() {
+        const H = state.height / 100;  // Convert cm to m
+        const W = state.width / 100;
+        const tV = state.thicknessV / 1000;  // Convert mm to m
+        const tH = state.thicknessH / 1000;
+        const r = state.filletRadius / 1000;
+
+        let A, Ixx, Iyy;
+        
+        // Hollow rectangular section
+        const H_inner = H - 2 * tH;
+        const W_inner = W - 2 * tV;
+        
+        if (H_inner > 0 && W_inner > 0) {
+            A = H * W - H_inner * W_inner;
+            Ixx = (W * Math.pow(H, 3) - W_inner * Math.pow(H_inner, 3)) / 12;
+            Iyy = (H * Math.pow(W, 3) - H_inner * Math.pow(W_inner, 3)) / 12;
+        } else {
+            // Solid section if inner dimensions invalid
+            A = H * W;
+            Ixx = W * Math.pow(H, 3) / 12;
+            Iyy = H * Math.pow(W, 3) / 12;
+        }
+
+        // LED groove reduction (Steiner correction)
+        if (state.ledGroove) {
+            const grooveWidth = 0.008;  // 8mm
+            const grooveDepth = 0.004;  // 4mm
+            const A_notch = grooveWidth * grooveDepth;
+            const d = H/2 - grooveDepth/2;  // Distance from centroid
+            const I_local = grooveWidth * Math.pow(grooveDepth, 3) / 12;
+            const I_reduction = I_local + A_notch * Math.pow(d, 2);
+            Ixx = Math.max(Ixx - I_reduction, Ixx * 0.5);
+            A -= A_notch;
+        }
+
+        const Wx = Ixx / (H / 2);
+
+        return { A, Ixx, Iyy, Wx, H, W };
+    }
+
+    // ==================== INSERT PROPERTIES ====================
+    function calculateInsertProperties() {
+        const H = state.insertHeight / 1000;  // mm to m
+        const W = state.insertWidth / 1000;
+        
+        let A, Ixx, Iyy;
+        
+        switch (state.insertShape) {
+            case 'hollow':
+                const t = Math.min(H, W) * 0.15;
+                A = H * W - (H - 2*t) * (W - 2*t);
+                Ixx = (W * Math.pow(H, 3) - (W - 2*t) * Math.pow(H - 2*t, 3)) / 12;
+                Iyy = (H * Math.pow(W, 3) - (H - 2*t) * Math.pow(W - 2*t, 3)) / 12;
+                break;
+            case 'ibeam':
+                const tf = H * 0.15;  // Flange thickness
+                const tw = W * 0.2;   // Web thickness
+                A = 2 * W * tf + (H - 2*tf) * tw;
+                Ixx = (W * Math.pow(H, 3) - (W - tw) * Math.pow(H - 2*tf, 3)) / 12;
+                Iyy = (2 * tf * Math.pow(W, 3) + (H - 2*tf) * Math.pow(tw, 3)) / 12;
+                break;
+            default: // solid
+                A = H * W;
+                Ixx = W * Math.pow(H, 3) / 12;
+                Iyy = H * Math.pow(W, 3) / 12;
+        }
+
+        return { A, Ixx, Iyy };
+    }
+
+    // ==================== RUNGE-KUTTA 4TH ORDER ====================
+    function rungeKutta4(f, x, y, h) {
+        const k1 = f(x, y);
+        const k2 = f(x + h/2, y + h * k1 / 2);
+        const k3 = f(x + h/2, y + h * k2 / 2);
+        const k4 = f(x + h, y + h * k3);
+        return y + (h / 6) * (k1 + 2*k2 + 2*k3 + k4);
+    }
+
+    // ==================== FEM BEAM SOLVER ====================
+    function solveBeamSystem() {
+        const startTime = performance.now();
+        
+        const mat = MATERIALS[state.beamMatKey];
+        const tempFactors = getTemperatureFactors(state.temperature);
+        
+        // Apply temperature factors
+        const E = mat.E * tempFactors[0];  // GPa
+        const sigma_y = mat.yield * tempFactors[1];  // MPa
+        const G = mat.G * tempFactors[0];  // GPa
+        
+        const section = calculateSectionProperties();
+        const insertSection = calculateInsertProperties();
+        
+        const L = state.length;  // m
+        const n = state.numElements;
+        const dx = L / n;
+        
+        // Load calculation
+        let q;  // Distributed load N/m
+        if (state.mode === 'mass') {
+            q = state.mass * 9.81 / L;  // N/m
+        } else {
+            q = state.pulleyForce / L;  // Simplified as distributed
+        }
+        
+        // Shear correction factor (Timoshenko)
+        const kappa = SHEAR_FACTORS[state.beamShape] || (5/6);
+        const A_shear = section.A * kappa;
+        
+        // Newton-Raphson iteration
+        const tolerance = 1e-7;
+        const maxIterations = 40;
+        let iterations = 0;
+        let converged = false;
+        
+        // Initialize arrays
+        let deflection = new Array(n + 1).fill(0);
+        let slope = new Array(n + 1).fill(0);
+        let moment = new Array(n + 1).fill(0);
+        let shear = new Array(n + 1).fill(0);
+        let stress = new Array(n + 1).fill(0);
+        
+        // Cantilever beam equations (fixed at x=0, free at x=L)
+        for (let iter = 0; iter < maxIterations; iter++) {
+            iterations = iter + 1;
+            let maxChange = 0;
+            
+            const deflection_old = [...deflection];
+            
+            // Calculate moment and shear at each point
+            for (let i = 0; i <= n; i++) {
+                const x = i * dx;
+                const remaining = L - x;
+                
+                // Cantilever with distributed load
+                shear[i] = q * remaining;  // N
+                moment[i] = q * remaining * remaining / 2;  // N*m
+                
+                // Stress from bending: σ = M * y / I
+                stress[i] = Math.abs(moment[i]) * (section.H / 2) / section.Ixx / 1e6;  // MPa
+            }
+            
+            // Integrate curvature to get slope and deflection using RK4
+            slope[0] = 0;  // Fixed end
+            deflection[0] = 0;  // Fixed end
+            
+            for (let i = 0; i < n; i++) {
+                const x = i * dx;
+                
+                // Get tangent modulus considering plasticity
+                const E_tangent = getTangentModulus(stress[i], E, sigma_y, mat.n_RO) / 1e9;  // Back to GPa
+                const EI = E_tangent * section.Ixx * 1e9;  // N*m²
+                
+                // Curvature κ = M / EI
+                const curvature = (x_val) => {
+                    const xi = Math.floor(x_val / dx);
+                    const validIdx = Math.min(Math.max(xi, 0), n);
+                    return moment[validIdx] / EI;
+                };
+                
+                // Timoshenko shear deformation
+                const shearDeformation = shear[i] / (G * 1e9 * A_shear);
+                
+                // RK4 for slope: dθ/dx = κ
+                slope[i + 1] = rungeKutta4(curvature, x, slope[i], dx);
+                
+                // RK4 for deflection: dv/dx = θ + γ (shear)
+                const slopeFunc = () => slope[i] + shearDeformation;
+                deflection[i + 1] = rungeKutta4(slopeFunc, x, deflection[i], dx);
+            }
+            
+            // Check convergence
+            for (let i = 0; i <= n; i++) {
+                maxChange = Math.max(maxChange, Math.abs(deflection[i] - deflection_old[i]));
+            }
+            
+            if (maxChange < tolerance) {
+                converged = true;
+                break;
+            }
+        }
+        
+        const endTime = performance.now();
+        
+        // Find maximum values
+        const maxStress = Math.max(...stress);
+        const maxDeflection = Math.max(...deflection.map(Math.abs)) * 1000;  // Convert to mm
+        
+        return {
+            deflection: deflection.map(d => d * 1000),  // mm
+            stress,
+            moment,
+            shear,
+            maxStress,
+            maxDeflection,
+            iterations,
+            converged,
+            time: endTime - startTime,
+            section,
+            insertSection,
+            E,
+            sigma_y,
+            tempFactors
+        };
+    }
+
+    // ==================== DRAWING FUNCTIONS ====================
+    function drawSystem(physics) {
+        const svg = document.getElementById('beamGroup');
+        svg.innerHTML = '';
+        
+        const viewWidth = 1000;
+        const viewHeight = 400;
+        const margin = 50;
+        const beamY = viewHeight / 2;
+        
+        const L = state.length;
+        const scale = (viewWidth - 2 * margin) / L;
+        const deflectionScale = state.scaleFactor * 50;
+        
+        // Draw wall support
+        const wallRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        wallRect.setAttribute('x', margin - 20);
+        wallRect.setAttribute('y', beamY - 60);
+        wallRect.setAttribute('width', 20);
+        wallRect.setAttribute('height', 120);
+        wallRect.setAttribute('fill', 'url(#wallPattern)');
+        wallRect.setAttribute('stroke', '#333');
+        svg.appendChild(wallRect);
+        
+        // Draw deformed beam with stress colors
+        const n = physics.deflection.length - 1;
+        const sigma_y = physics.sigma_y;
+        
+        for (let i = 0; i < n; i++) {
+            const x1 = margin + (i / n) * L * scale;
+            const x2 = margin + ((i + 1) / n) * L * scale;
+            const y1 = beamY + physics.deflection[i] * deflectionScale;
+            const y2 = beamY + physics.deflection[i + 1] * deflectionScale;
+            
+            // Stress color interpolation
+            const stressRatio = Math.min(physics.stress[i] / sigma_y, 1);
+            let color;
+            if (stressRatio < 0.5) {
+                const t = stressRatio * 2;
+                color = interpolateColor('#22c55e', '#eab308', t);
+            } else {
+                const t = (stressRatio - 0.5) * 2;
+                color = interpolateColor('#eab308', '#dc2626', t);
+            }
+            
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            line.setAttribute('stroke', color);
+            line.setAttribute('stroke-width', 8);
+            line.setAttribute('stroke-linecap', 'round');
+            svg.appendChild(line);
+        }
+        
+        // Draw load arrows
+        const arrowSpacing = scale * L / 10;
+        for (let i = 1; i <= 9; i++) {
+            const x = margin + i * arrowSpacing;
+            const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const arrowY = beamY - 40;
+            arrow.setAttribute('d', `M${x},${arrowY - 20} L${x},${arrowY} L${x - 5},${arrowY - 8} M${x},${arrowY} L${x + 5},${arrowY - 8}`);
+            arrow.setAttribute('stroke', '#dc2626');
+            arrow.setAttribute('stroke-width', 2);
+            arrow.setAttribute('fill', 'none');
+            svg.appendChild(arrow);
+        }
+        
+        // Load label
+        const loadText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        loadText.setAttribute('x', margin + scale * L / 2);
+        loadText.setAttribute('y', beamY - 70);
+        loadText.setAttribute('text-anchor', 'middle');
+        loadText.setAttribute('fill', '#dc2626');
+        loadText.setAttribute('font-size', '14');
+        loadText.textContent = state.mode === 'mass' ? `q = ${(state.mass * 9.81 / L).toFixed(1)} N/m` : `F = ${state.pulleyForce} N`;
+        svg.appendChild(loadText);
+        
+        // Dimension line
+        const dimY = beamY + 80;
+        const dimLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        dimLine.setAttribute('x1', margin);
+        dimLine.setAttribute('y1', dimY);
+        dimLine.setAttribute('x2', margin + L * scale);
+        dimLine.setAttribute('y2', dimY);
+        dimLine.setAttribute('stroke', '#666');
+        dimLine.setAttribute('stroke-width', 1);
+        svg.appendChild(dimLine);
+        
+        const dimText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dimText.setAttribute('x', margin + L * scale / 2);
+        dimText.setAttribute('y', dimY + 20);
+        dimText.setAttribute('text-anchor', 'middle');
+        dimText.setAttribute('fill', '#666');
+        dimText.setAttribute('font-size', '12');
+        dimText.textContent = `L = ${L.toFixed(2)} m`;
+        svg.appendChild(dimText);
+        
+        // Max deflection indicator
+        const maxDefIdx = physics.deflection.indexOf(Math.max(...physics.deflection));
+        const maxDefX = margin + (maxDefIdx / n) * L * scale;
+        const maxDefY = beamY + physics.deflection[maxDefIdx] * deflectionScale;
+        
+        const defCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        defCircle.setAttribute('cx', maxDefX);
+        defCircle.setAttribute('cy', maxDefY);
+        defCircle.setAttribute('r', 5);
+        defCircle.setAttribute('fill', '#3b82f6');
+        svg.appendChild(defCircle);
+        
+        const defLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        defLabel.setAttribute('x', maxDefX + 10);
+        defLabel.setAttribute('y', maxDefY + 5);
+        defLabel.setAttribute('fill', '#3b82f6');
+        defLabel.setAttribute('font-size', '12');
+        defLabel.textContent = `δmax = ${physics.maxDeflection.toFixed(2)} mm`;
+        svg.appendChild(defLabel);
+    }
+
+    function interpolateColor(color1, color2, t) {
+        const c1 = hexToRgb(color1);
+        const c2 = hexToRgb(color2);
+        const r = Math.round(c1.r + t * (c2.r - c1.r));
+        const g = Math.round(c1.g + t * (c2.g - c1.g));
+        const b = Math.round(c1.b + t * (c2.b - c1.b));
+        return `rgb(${r},${g},${b})`;
+    }
+
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+    }
+
+    // ==================== SECTION PREVIEW ====================
+    function updateSectionPreview() {
+        const svg = document.getElementById('sectionGroup');
+        svg.innerHTML = '';
+        
+        const centerX = 100;
+        const centerY = 100;
+        const scale = 2;
+        
+        let H, W, section;
+        
+        if (state.previewMode === 'beam') {
+            H = state.height * scale;
+            W = state.width * scale;
+            const tV = state.thicknessV * scale;
+            const tH = state.thicknessH * scale;
+            
+            // Outer rectangle
+            const outer = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            outer.setAttribute('x', centerX - W/2);
+            outer.setAttribute('y', centerY - H/2);
+            outer.setAttribute('width', W);
+            outer.setAttribute('height', H);
+            outer.setAttribute('fill', '#e5e7eb');
+            outer.setAttribute('stroke', '#374151');
+            outer.setAttribute('stroke-width', 2);
+            outer.setAttribute('rx', state.filletRadius * scale / 2);
+            svg.appendChild(outer);
+            
+            // Inner cutout (for hollow section)
+            const innerW = W - 2 * tV;
+            const innerH = H - 2 * tH;
+            if (innerW > 0 && innerH > 0) {
+                const inner = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                inner.setAttribute('x', centerX - innerW/2);
+                inner.setAttribute('y', centerY - innerH/2);
+                inner.setAttribute('width', innerW);
+                inner.setAttribute('height', innerH);
+                inner.setAttribute('fill', 'white');
+                inner.setAttribute('stroke', '#374151');
+                inner.setAttribute('stroke-width', 1);
+                svg.appendChild(inner);
+            }
+            
+            // LED groove
+            if (state.ledGroove) {
+                const groove = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                groove.setAttribute('x', centerX - 8 * scale / 2);
+                groove.setAttribute('y', centerY - H/2);
+                groove.setAttribute('width', 8 * scale);
+                groove.setAttribute('height', 4 * scale);
+                groove.setAttribute('fill', '#fbbf24');
+                groove.setAttribute('stroke', '#374151');
+                svg.appendChild(groove);
+            }
+            
+            section = calculateSectionProperties();
+        } else {
+            // Insert preview
+            H = state.insertHeight * scale / 10;
+            W = state.insertWidth * scale / 10;
+            
+            if (state.insertShape === 'solid') {
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', centerX - W/2);
+                rect.setAttribute('y', centerY - H/2);
+                rect.setAttribute('width', W);
+                rect.setAttribute('height', H);
+                rect.setAttribute('fill', '#9ca3af');
+                rect.setAttribute('stroke', '#374151');
+                rect.setAttribute('stroke-width', 2);
+                svg.appendChild(rect);
+            } else if (state.insertShape === 'hollow') {
+                const t = Math.min(H, W) * 0.15;
+                const outer = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                outer.setAttribute('x', centerX - W/2);
+                outer.setAttribute('y', centerY - H/2);
+                outer.setAttribute('width', W);
+                outer.setAttribute('height', H);
+                outer.setAttribute('fill', '#9ca3af');
+                outer.setAttribute('stroke', '#374151');
+                outer.setAttribute('stroke-width', 2);
+                svg.appendChild(outer);
+                
+                const inner = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                inner.setAttribute('x', centerX - W/2 + t);
+                inner.setAttribute('y', centerY - H/2 + t);
+                inner.setAttribute('width', W - 2*t);
+                inner.setAttribute('height', H - 2*t);
+                inner.setAttribute('fill', 'white');
+                svg.appendChild(inner);
+            } else { // ibeam
+                const tf = H * 0.15;
+                const tw = W * 0.2;
+                
+                // Top flange
+                const topFlange = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                topFlange.setAttribute('x', centerX - W/2);
+                topFlange.setAttribute('y', centerY - H/2);
+                topFlange.setAttribute('width', W);
+                topFlange.setAttribute('height', tf);
+                topFlange.setAttribute('fill', '#9ca3af');
+                topFlange.setAttribute('stroke', '#374151');
+                svg.appendChild(topFlange);
+                
+                // Web
+                const web = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                web.setAttribute('x', centerX - tw/2);
+                web.setAttribute('y', centerY - H/2 + tf);
+                web.setAttribute('width', tw);
+                web.setAttribute('height', H - 2*tf);
+                web.setAttribute('fill', '#9ca3af');
+                web.setAttribute('stroke', '#374151');
+                svg.appendChild(web);
+                
+                // Bottom flange
+                const bottomFlange = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bottomFlange.setAttribute('x', centerX - W/2);
+                bottomFlange.setAttribute('y', centerY + H/2 - tf);
+                bottomFlange.setAttribute('width', W);
+                bottomFlange.setAttribute('height', tf);
+                bottomFlange.setAttribute('fill', '#9ca3af');
+                bottomFlange.setAttribute('stroke', '#374151');
+                svg.appendChild(bottomFlange);
+            }
+            
+            section = calculateInsertProperties();
+        }
+        
+        // Update section properties display
+        document.getElementById('areaDisplay').textContent = `${(section.A * 1e6).toFixed(1)} mm²`;
+        document.getElementById('ixxDisplay').textContent = `${(section.Ixx * 1e8).toFixed(4)} cm⁴`;
+        document.getElementById('iyyDisplay').textContent = `${(section.Iyy * 1e8).toFixed(4)} cm⁴`;
+        document.getElementById('wxDisplay').textContent = `${(section.Wx ? section.Wx * 1e6 : 0).toFixed(3)} cm³`;
+    }
+
+    // ==================== STATUS BADGE ====================
+    function updateBadge(physics) {
+        const badge = document.getElementById('statusBadge');
+        const ratio = physics.maxStress / physics.sigma_y;
+        
+        if (ratio < 0.5) {
+            badge.textContent = 'OK';
+            badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-green-500 text-white';
+        } else if (ratio < 0.75) {
+            badge.textContent = 'ATTENZIONE';
+            badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-yellow-500 text-black';
+        } else if (ratio < 1.0) {
+            badge.textContent = 'CRITICO';
+            badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-orange-500 text-white';
+        } else {
+            badge.textContent = 'ROTTURA';
+            badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-red-600 text-white';
+        }
+    }
+
+    // ==================== MAIN UPDATE FUNCTION ====================
+    function update() {
+        // Read UI values
+        state.mode = document.getElementById('modeSelect').value;
+        state.mass = parseFloat(document.getElementById('massSlider').value);
+        state.pulleyForce = parseFloat(document.getElementById('pulleySlider').value);
+        state.beamMatKey = document.getElementById('beamMatSelect').value;
+        state.insertMatKey = document.getElementById('insertMatSelect').value;
+        state.length = parseFloat(document.getElementById('lengthSlider').value);
+        state.height = parseFloat(document.getElementById('heightSlider').value) / 10;  // mm to cm
+        state.width = parseFloat(document.getElementById('widthSlider').value) / 10;
+        state.thicknessV = parseFloat(document.getElementById('thicknessVSlider').value);
+        state.thicknessH = parseFloat(document.getElementById('thicknessHSlider').value);
+        state.filletRadius = parseFloat(document.getElementById('filletSlider').value);
+        state.insertHeight = parseFloat(document.getElementById('insertHeightSlider').value);
+        state.insertWidth = parseFloat(document.getElementById('insertWidthSlider').value);
+        state.beamShape = document.getElementById('beamShapeSelect').value;
+        state.insertShape = document.getElementById('insertShapeSelect').value;
+        state.temperature = parseFloat(document.getElementById('tempSlider').value);
+        state.numElements = parseInt(document.getElementById('elementsSlider').value);
+        state.scaleFactor = parseFloat(document.getElementById('scaleSlider').value);
+        state.ledGroove = document.getElementById('ledGrooveCheck').checked;
+        state.previewMode = document.getElementById('previewModeSelect').value;
+        
+        // Update value displays
+        document.getElementById('massValue').textContent = state.mass;
+        document.getElementById('pulleyValue').textContent = state.pulleyForce;
+        document.getElementById('lengthValue').textContent = state.length.toFixed(1);
+        document.getElementById('heightValue').textContent = (state.height * 10).toFixed(0);
+        document.getElementById('widthValue').textContent = (state.width * 10).toFixed(0);
+        document.getElementById('thicknessVValue').textContent = state.thicknessV.toFixed(1);
+        document.getElementById('thicknessHValue').textContent = state.thicknessH.toFixed(1);
+        document.getElementById('filletValue').textContent = state.filletRadius.toFixed(1);
+        document.getElementById('insertHeightValue').textContent = state.insertHeight;
+        document.getElementById('insertWidthValue').textContent = state.insertWidth;
+        document.getElementById('tempValue').textContent = state.temperature;
+        document.getElementById('elementsValue').textContent = state.numElements;
+        document.getElementById('scaleValue').textContent = state.scaleFactor.toFixed(1);
+        
+        // Toggle mass/pulley controls
+        document.getElementById('massControl').classList.toggle('hidden', state.mode !== 'mass');
+        document.getElementById('pulleyControl').classList.toggle('hidden', state.mode !== 'pulley');
+        
+        // Solve FEM
+        const physics = solveBeamSystem();
+        
+        // Update results
+        document.getElementById('stressResult').textContent = physics.maxStress.toFixed(1);
+        document.getElementById('deflectionResult').textContent = physics.maxDeflection.toFixed(2);
+        document.getElementById('inertiaResult').textContent = (physics.section.Ixx * 1e8).toFixed(4);
+        document.getElementById('insertInertiaResult').textContent = (physics.insertSection.Ixx * 1e8).toFixed(4);
+        document.getElementById('iterationsResult').textContent = physics.iterations;
+        document.getElementById('timeResult').textContent = physics.time.toFixed(1);
+        
+        // Update material info
+        const mat = MATERIALS[state.beamMatKey];
+        document.getElementById('matE').textContent = `${(mat.E * physics.tempFactors[0]).toFixed(1)} GPa`;
+        document.getElementById('matYield').textContent = `${(mat.yield * physics.tempFactors[1]).toFixed(0)} MPa`;
+        document.getElementById('matTensile').textContent = `${(mat.tensile * physics.tempFactors[2]).toFixed(0)} MPa`;
+        document.getElementById('matN').textContent = mat.n_RO;
+        document.getElementById('matKE').textContent = physics.tempFactors[0].toFixed(3);
+        
+        // Draw
+        drawSystem(physics);
+        updateSectionPreview();
+        updateBadge(physics);
+    }
+
+    // ==================== INITIALIZATION ====================
+    function init() {
+        // Populate material selects
+        const beamSelect = document.getElementById('beamMatSelect');
+        const insertSelect = document.getElementById('insertMatSelect');
+        
+        for (const [key, mat] of Object.entries(MATERIALS)) {
+            const option1 = document.createElement('option');
+            option1.value = key;
+            option1.textContent = mat.name;
+            beamSelect.appendChild(option1);
+            
+            const option2 = document.createElement('option');
+            option2.value = key;
+            option2.textContent = mat.name;
+            insertSelect.appendChild(option2);
+        }
+        
+        beamSelect.value = state.beamMatKey;
+        insertSelect.value = state.insertMatKey;
+        
+        // Add event listeners
+        const controls = [
+            'modeSelect', 'massSlider', 'pulleySlider', 'beamMatSelect', 'insertMatSelect',
+            'lengthSlider', 'heightSlider', 'widthSlider', 'thicknessVSlider', 'thicknessHSlider',
+            'filletSlider', 'insertHeightSlider', 'insertWidthSlider', 'beamShapeSelect',
+            'insertShapeSelect', 'tempSlider', 'elementsSlider', 'scaleSlider', 'ledGrooveCheck',
+            'previewModeSelect'
+        ];
+        
+        controls.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', update);
+                el.addEventListener('change', update);
+            }
+        });
+        
+        // Initial update
+        update();
+    }
+
+    // Start application
+    document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
