@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore Trave Gibus v2.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header Gibus rosso */
+        .header {
+            background: linear-gradient(135deg, #c41e3a 0%, #8b0000 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        
+        .header .version {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        /* Layout principale */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Sidebar sinistra */
+        .sidebar-left {
+            width: 320px;
+            background: white;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        /* Area centrale */
+        .center-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        /* Sidebar destra */
+        .sidebar-right {
+            width: 350px;
+            background: white;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid #e0e0e0;
+        }
+        
+        /* Pannelli */
+        .panel {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #c41e3a;
+        }
+        
+        /* Form controls */
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #c41e3a;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(196, 30, 58, 0.1);
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        /* Checkbox stile */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #c41e3a;
+        }
+        
+        .checkbox-group label {
+            font-size: 12px;
+            color: #333;
+            cursor: pointer;
+        }
+        
+        /* Button */
+        .btn-primary {
+            background: linear-gradient(135deg, #c41e3a 0%, #8b0000 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(196, 30, 58, 0.4);
+        }
+        
+        /* Preview sezione */
+        .section-preview {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .section-preview svg {
+            max-width: 100%;
+        }
+        
+        /* Area grafico */
+        .graph-container {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+        }
+        
+        .graph-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Risultati */
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .result-label {
+            color: #666;
+        }
+        
+        .result-value {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .result-value.ok {
+            color: #22c55e;
+        }
+        
+        .result-value.warning {
+            color: #f59e0b;
+        }
+        
+        .result-value.danger {
+            color: #ef4444;
+        }
+        
+        /* Status bar */
+        .status-bar {
+            background: #333;
+            color: #aaa;
+            padding: 8px 20px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Simulatore Trave Gibus <span class="version">v2.0</span></h1>
+        <div>FEM Cantilever Analysis</div>
+    </div>
+    
+    <div class="main-container">
+        <!-- Sidebar Sinistra - Input -->
+        <div class="sidebar-left">
+            <div class="panel">
+                <div class="panel-title">📐 Geometria Trave</div>
+                
+                <div class="form-group">
+                    <label>Lunghezza [mm]</label>
+                    <input type="number" id="length" value="2000" min="100" max="5000">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Base [mm]</label>
+                        <input type="number" id="base" value="40" min="10" max="200">
+                    </div>
+                    <div class="form-group">
+                        <label>Altezza [mm]</label>
+                        <input type="number" id="height" value="60" min="10" max="200">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Spessore [mm]</label>
+                    <input type="number" id="thickness" value="2" min="0.5" max="10" step="0.1">
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">🔧 Materiale Trave</div>
+                
+                <div class="form-group">
+                    <label>Lega Alluminio</label>
+                    <select id="beamMaterial">
+                        <option value="6060-T4">6060 T4</option>
+                        <option value="6060-T6">6060 T6</option>
+                        <option value="6061-T4">6061 T4</option>
+                        <option value="6061-T6" selected>6061 T6</option>
+                        <option value="6063-T6">6063 T6</option>
+                        <option value="6082-T6">6082 T6</option>
+                        <option value="7075-T6">7075 T6 (Ergal)</option>
+                        <option value="2024-T3">2024 T3 (Avional)</option>
+                        <option value="46100-F">EN AB 46100</option>
+                        <option value="46000-F">EN AB 46000</option>
+                        <option value="47100-F">EN AB 47100</option>
+                        <option value="ZA-27">Zamak 27</option>
+                        <option value="42100-T6">EN AB 42100 T6</option>
+                        <option value="6082-CNC">6082 T6 (CNC)</option>
+                        <option value="7075-CNC">7075 T6 (CNC)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">🔩 Inserto</div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Larghezza [mm]</label>
+                        <input type="number" id="insertWidth" value="36" min="10" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Spessore [mm]</label>
+                        <input type="number" id="insertThickness" value="4" min="1" max="20">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Materiale Inserto</label>
+                    <select id="insertMaterial">
+                        <option value="6060-T4">6060 T4</option>
+                        <option value="6060-T6">6060 T6</option>
+                        <option value="6061-T4">6061 T4</option>
+                        <option value="6061-T6">6061 T6</option>
+                        <option value="6063-T6">6063 T6</option>
+                        <option value="6082-T6" selected>6082 T6</option>
+                        <option value="7075-T6">7075 T6 (Ergal)</option>
+                        <option value="2024-T3">2024 T3 (Avional)</option>
+                        <option value="46100-F">EN AB 46100</option>
+                        <option value="46000-F">EN AB 46000</option>
+                        <option value="47100-F">EN AB 47100</option>
+                        <option value="ZA-27">Zamak 27</option>
+                        <option value="42100-T6">EN AB 42100 T6</option>
+                        <option value="6082-CNC">6082 T6 (CNC)</option>
+                        <option value="7075-CNC">7075 T6 (CNC)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">⚙️ Opzioni</div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="ledGroove">
+                    <label for="ledGroove">Cava LED</label>
+                </div>
+                
+                <div class="form-row" id="grooveOptions" style="display: none;">
+                    <div class="form-group">
+                        <label>Larghezza cava [mm]</label>
+                        <input type="number" id="grooveWidth" value="12" min="5" max="30">
+                    </div>
+                    <div class="form-group">
+                        <label>Profondità [mm]</label>
+                        <input type="number" id="grooveDepth" value="8" min="3" max="20">
+                    </div>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enablePDelta" checked>
+                    <label for="enablePDelta">Effetto P-Delta</label>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enableNonlinear" checked>
+                    <label for="enableNonlinear">Analisi non lineare</label>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enableShear">
+                    <label for="enableShear">Deformazione taglio</label>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">⬇️ Carico</div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Forza Y [N]</label>
+                        <input type="number" id="forceY" value="-500" step="10">
+                    </div>
+                    <div class="form-group">
+                        <label>Forza X [N]</label>
+                        <input type="number" id="forceX" value="0" step="10">
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn-primary" onclick="runAnalysis()">
+                ▶ Esegui Analisi
+            </button>
+        </div>
+        
+        <!-- Area Centrale - Grafici -->
+        <div class="center-area">
+            <div class="section-preview" id="sectionPreview">
+                <svg id="sectionSvg" width="280" height="200" viewBox="0 0 280 200"></svg>
+            </div>
+            
+            <div class="graph-container" id="graphContainer">
+                <svg id="beamSvg" viewBox="0 0 800 400"></svg>
+            </div>
+        </div>
+        
+        <!-- Sidebar Destra - Risultati -->
+        <div class="sidebar-right">
+            <div class="panel">
+                <div class="panel-title">📊 Risultati Analisi</div>
+                
+                <div class="result-item">
+                    <span class="result-label">Freccia massima</span>
+                    <span class="result-value" id="resultDeflection">-- mm</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Tensione trave</span>
+                    <span class="result-value" id="resultStressBeam">-- MPa</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Tensione inserto</span>
+                    <span class="result-value" id="resultStressInsert">-- MPa</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">SF Trave</span>
+                    <span class="result-value" id="resultSFBeam">--</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">SF Inserto</span>
+                    <span class="result-value" id="resultSFInsert">--</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Rotazione punta</span>
+                    <span class="result-value" id="resultRotation">-- °</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Frequenza naturale</span>
+                    <span class="result-value" id="resultFrequency">-- Hz</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Iterazioni</span>
+                    <span class="result-value" id="resultIterations">--</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Convergenza</span>
+                    <span class="result-value" id="resultConverged">--</span>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">📐 Proprietà Sezione</div>
+                
+                <div class="result-item">
+                    <span class="result-label">Area</span>
+                    <span class="result-value" id="propArea">-- mm²</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Momento Inerzia Ix</span>
+                    <span class="result-value" id="propIx">-- mm⁴</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Modulo resistenza Wx</span>
+                    <span class="result-value" id="propWx">-- mm³</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Peso lineare</span>
+                    <span class="result-value" id="propWeight">-- kg/m</span>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">🔧 Info Materiale</div>
+                
+                <div class="result-item">
+                    <span class="result-label">E trave</span>
+                    <span class="result-value" id="matEBeam">-- GPa</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">σy trave</span>
+                    <span class="result-value" id="matYieldBeam">-- MPa</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">n_RO trave</span>
+                    <span class="result-value" id="matNroBeam">--</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">E inserto</span>
+                    <span class="result-value" id="matEInsert">-- GPa</span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">σy inserto</span>
+                    <span class="result-value" id="matYieldInsert">-- MPa</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status-bar">
+        <span id="statusText">Pronto</span>
+        <span>Simulatore Gibus FEM v2.0</span>
+    </div>
+
+    <script>
+        // ============================================
+        // DATABASE MATERIALI con n_RO (Ramberg-Osgood)
+        // ============================================
+        const MATERIALS = {
+            '6060-T4': { E: 68.0, yield: 65, tensile: 130, n_RO: 25, density: 2700, name: "6060 T4" },
+            '6060-T6': { E: 69.0, yield: 150, tensile: 190, n_RO: 25, density: 2700, name: "6060 T6" },
+            '6061-T4': { E: 68.3, yield: 110, tensile: 205, n_RO: 22, density: 2700, name: "6061 T4" },
+            '6061-T6': { E: 70.0, yield: 240, tensile: 290, n_RO: 20, density: 2700, name: "6061 T6" },
+            '6063-T6': { E: 69.5, yield: 170, tensile: 215, n_RO: 22, density: 2700, name: "6063 T6" },
+            '6082-T6': { E: 70.5, yield: 260, tensile: 310, n_RO: 18, density: 2700, name: "6082 T6" },
+            '7075-T6': { E: 71.7, yield: 505, tensile: 570, n_RO: 12, density: 2810, name: "7075 T6 (Ergal)" },
+            '2024-T3': { E: 73.1, yield: 345, tensile: 480, n_RO: 10, density: 2780, name: "2024 T3 (Avional)" },
+            '46100-F': { E: 71.0, yield: 140, tensile: 240, n_RO: 15, density: 2650, name: "EN AB 46100" },
+            '46000-F': { E: 72.0, yield: 140, tensile: 240, n_RO: 15, density: 2650, name: "EN AB 46000" },
+            '47100-F': { E: 75.0, yield: 150, tensile: 260, n_RO: 14, density: 2680, name: "EN AB 47100" },
+            'ZA-27':   { E: 78.0, yield: 370, tensile: 400, n_RO: 8, density: 5000, name: "Zamak 27" },
+            '42100-T6': { E: 71.0, yield: 210, tensile: 290, n_RO: 16, density: 2680, name: "EN AB 42100 T6" },
+            '6082-CNC': { E: 70.0, yield: 260, tensile: 310, n_RO: 18, density: 2700, name: "6082 T6 (CNC)" },
+            '7075-CNC': { E: 71.7, yield: 500, tensile: 570, n_RO: 12, density: 2810, name: "7075 T6 (CNC)" },
+        };
+        
+        // ============================================
+        // COSTANTI
+        // ============================================
+        const CONSTANTS = {
+            densityAluminum: 2700,  // kg/m³
+            safetyFactor: 1.5,
+            numSegments: 50,
+            maxIterations: 100
+        };
+        
+        // ============================================
+        // STATO APPLICAZIONE
+        // ============================================
+        const state = {
+            length: 2000,
+            base: 40,
+            height: 60,
+            thickness: 2,
+            beamMaterial: '6061-T6',
+            insertWidth: 36,
+            insertThickness: 4,
+            insertMaterial: '6082-T6',
+            forceX: 0,
+            forceY: -500,
+            ledGroove: false,
+            enablePDelta: true,
+            enableShear: false,
+            enableNonlinear: true,
+            grooveWidth: 12,
+            grooveDepth: 8,
+        };
+        
+        // ============================================
+        // FUNZIONE RAMBERG-OSGOOD TANGENT MODULUS
+        // ============================================
+        function getRambergOsgoodTangentModulus(stress_Pa, E_Pa, sigma_y_Pa, n_RO) {
+            if (stress_Pa <= 0) return E_Pa;
+            const ratio = Math.abs(stress_Pa) / sigma_y_Pa;
+            if (ratio < 0.3) return E_Pa;
+            const dEpsDSigma = 1/E_Pa + 0.002 * n_RO * Math.pow(ratio, n_RO - 1) / sigma_y_Pa;
+            return 1 / dEpsDSigma;
+        }
+        
+        // ============================================
+        // CALCOLO PROPRIETÀ SEZIONE
+        // ============================================
+        function calculateSectionProperties() {
+            const B = state.base;
+            const H = state.height;
+            const t = state.thickness;
+            
+            // Sezione cava rettangolare
+            const B_inner = B - 2 * t;
+            const H_inner = H - 2 * t;
+            
+            let area = B * H - B_inner * H_inner;
+            let Ix = (B * Math.pow(H, 3) - B_inner * Math.pow(H_inner, 3)) / 12;
+            
+            // Sottrai area cava LED se presente
+            if (state.ledGroove) {
+                const grooveW = state.grooveWidth || 12;
+                const grooveH = state.grooveDepth || 8;
+                const grooveArea = grooveW * grooveH;
+                area -= grooveArea;
+                
+                // Approssimazione per momento inerzia
+                const grooveCenterY = H / 2 - grooveH / 2;
+                Ix -= grooveW * Math.pow(grooveH, 3) / 12 + grooveArea * Math.pow(grooveCenterY, 2);
+            }
+            
+            const Wx = Ix / (H / 2);
+            const mat = MATERIALS[state.beamMaterial];
+            const weight = area * mat.density / 1e6; // kg/m
+            
+            return { area, Ix, Wx, weight };
+        }
+        
+        // ============================================
+        // CALCOLO PROPRIETÀ INSERTO
+        // ============================================
+        function calculateInsertProperties() {
+            const w = state.insertWidth;
+            const t = state.insertThickness;
+            
+            const area = w * t;
+            const Ix = w * Math.pow(t, 3) / 12;
+            const Wx = Ix / (t / 2);
+            
+            return { area, Ix, Wx };
+        }
+        
+        // ============================================
+        // SOLUTORE FEM TRAVE
+        // ============================================
+        function solveBeamSystem() {
+            const numSegments = CONSTANTS.numSegments;
+            const maxIter = CONSTANTS.maxIterations;
+            const L = state.length / 1000; // metri
+            const dx = L / numSegments;
+            
+            // Materiali
+            const beamMat = MATERIALS[state.beamMaterial];
+            const insertMat = MATERIALS[state.insertMaterial];
+            
+            // Proprietà sezione
+            const beamProps = calculateSectionProperties();
+            const insertProps = calculateInsertProperties();
+            
+            // EI in SI
+            const EI_beam = beamMat.E * 1e9 * beamProps.Ix * 1e-12; // N·m²
+            const EI_insert = insertMat.E * 1e9 * insertProps.Ix * 1e-12;
+            
+            // Area in m²
+            const beamArea_m2 = beamProps.area * 1e-6;
+            
+            // Forze
+            const Fx = state.forceX;
+            const Fy = state.forceY;
+            
+            // Limiti tensione
+            const yieldBeam = beamMat.yield;
+            const yieldInsert = insertMat.yield;
+            const finalBeamLimit = yieldBeam / CONSTANTS.safetyFactor;
+            const finalInsertLimit = yieldInsert / CONSTANTS.safetyFactor;
+            
+            // Inizializza nodi
+            let nodes = [];
+            for (let i = 0; i <= numSegments; i++) {
+                nodes.push({
+                    x: i * dx,
+                    y: 0,
+                    theta: 0
+                });
+            }
+            
+            let stressBeam = 0;
+            let stressInsert = 0;
+            
+            // Controllo convergenza
+            const tolerance = 1e-6;
+            let converged = false;
+            let prevTipY = 0;
+            let iterations = 0;
+            
+            // Iterazione geometricamente non lineare
+            for (let iter = 0; iter < maxIter && !converged; iter++) {
+                // Reset per nuova iterazione
+                for (let i = 0; i <= numSegments; i++) {
+                    nodes[i].y = 0;
+                    nodes[i].theta = 0;
+                }
+                
+                let cumulativeTheta = 0;
+                
+                // Integrazione dalla radice alla punta
+                for (let i = 0; i < numSegments; i++) {
+                    const x_i = nodes[i].x;
+                    const tipX = L;
+                    const tipY = (iter > 0) ? nodes[numSegments].y : 0;
+                    
+                    // Braccio del momento
+                    const leverArmX = tipX - x_i;
+                    const leverArmY = tipY - nodes[i].y;
+                    
+                    // Momento flettente
+                    let M = Fy * leverArmX - Fx * leverArmY;
+                    
+                    // Effetto P-Delta (secondo ordine)
+                    if (state.enablePDelta && iter > 0) {
+                        const P = Fy;
+                        const delta = nodes[i].y;
+                        const M_pdelta = P * delta;
+                        M += M_pdelta;
+                    }
+                    
+                    // EI effettivo (considerando inserto su primi 10%)
+                    let EI_eff = EI_beam;
+                    const insertFraction = 0.1;
+                    if (x_i < L * insertFraction) {
+                        EI_eff = EI_beam + EI_insert;
+                    }
+                    
+                    // Curvatura
+                    const kappa = M / EI_eff;
+                    const dTheta = kappa * dx;
+                    
+                    cumulativeTheta += dTheta;
+                    
+                    // Aggiorna nodo successivo
+                    nodes[i + 1].x = nodes[i].x + dx * Math.cos(cumulativeTheta);
+                    nodes[i + 1].y = nodes[i].y + dx * Math.sin(cumulativeTheta);
+                    nodes[i + 1].theta = cumulativeTheta;
+                    
+                    // Tensione massima
+                    const sigma_beam = Math.abs(M) * (state.height / 2000) / (beamProps.Ix * 1e-12);
+                    const sigma_insert = Math.abs(M) * (state.insertThickness / 2000) / (insertProps.Ix * 1e-12);
+                    
+                    stressBeam = Math.max(stressBeam, sigma_beam);
+                    if (x_i < L * insertFraction) {
+                        stressInsert = Math.max(stressInsert, sigma_insert);
+                    }
+                }
+                
+                // Controllo convergenza
+                const currentTipY = nodes[numSegments].y;
+                const residual = Math.abs(currentTipY - prevTipY);
+                if (residual < tolerance && iter > 5) {
+                    converged = true;
+                }
+                prevTipY = currentTipY;
+                iterations = iter + 1;
+            }
+            
+            // Risultati
+            const tipDeflection = Math.abs(nodes[numSegments].y) * 1000; // mm
+            
+            // Calcolo fattori di sicurezza
+            const SF_beam = (stressBeam > 0) ? (finalBeamLimit / (stressBeam / 1e6)) : Infinity;
+            const SF_insert = (stressInsert > 0) ? (finalInsertLimit / (stressInsert / 1e6)) : Infinity;
+
+            // Frequenza naturale stimata
+            const lambda1 = 1.875;
+            const rho = CONSTANTS.densityAluminum;
+            const f0 = (lambda1 * lambda1 / (2 * Math.PI)) * Math.sqrt(EI_beam / (rho * beamArea_m2 * Math.pow(state.length / 1000, 4)));
+
+            // Rotazione all'estremità
+            const tipRotation_deg = nodes[numSegments].theta * (180 / Math.PI);
+            
+            return {
+                nodes,
+                tipDeflection,
+                stressBeam: stressBeam / 1e6,  // MPa
+                stressInsert: stressInsert / 1e6,  // MPa
+                yieldBeam,
+                yieldInsert,
+                finalBeamLimit,
+                finalInsertLimit,
+                SF_beam, 
+                SF_insert,
+                f0_Hz: f0,
+                tipRotation_deg,
+                iterations,
+                converged
+            };
+        }
+        
+        // ============================================
+        // AGGIORNA PREVIEW SEZIONE
+        // ============================================
+        function updateSectionPreview() {
+            const svg = document.getElementById('sectionSvg');
+            svg.innerHTML = '';
+            
+            const cx = 140;
+            const cy = 100;
+            const scale = 2.5;
+            
+            const B_px = state.base * scale;
+            const H_px = state.height * scale;
+            const t_px = state.thickness * scale;
+            
+            const opacityBeam = 0.9;
+            
+            // Rettangolo esterno
+            const outer = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            outer.setAttribute("x", cx - B_px / 2);
+            outer.setAttribute("y", cy - H_px / 2);
+            outer.setAttribute("width", B_px);
+            outer.setAttribute("height", H_px);
+            outer.setAttribute("fill", "#94a3b8");
+            outer.setAttribute("stroke", "#475569");
+            outer.setAttribute("stroke-width", "2");
+            outer.setAttribute("opacity", opacityBeam);
+            svg.appendChild(outer);
+            
+            // Rettangolo interno (cavo)
+            const inner = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            inner.setAttribute("x", cx - B_px / 2 + t_px);
+            inner.setAttribute("y", cy - H_px / 2 + t_px);
+            inner.setAttribute("width", B_px - 2 * t_px);
+            inner.setAttribute("height", H_px - 2 * t_px);
+            inner.setAttribute("fill", "#f8fafc");
+            inner.setAttribute("stroke", "#475569");
+            inner.setAttribute("stroke-width", "1");
+            svg.appendChild(inner);
+            
+            // Cava LED (solo rettangolo con dimensioni dinamiche)
+            if (state.ledGroove) {
+                const grooveW = (state.grooveWidth || 12) * scale / 10;
+                const grooveH = (state.grooveDepth || 8) * scale / 10;
+                
+                const groove = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                groove.setAttribute("x", cx - grooveW / 2);
+                groove.setAttribute("y", cy - H_px / 2);
+                groove.setAttribute("width", grooveW);
+                groove.setAttribute("height", grooveH);
+                groove.setAttribute("fill", "#fef3c7");
+                groove.setAttribute("stroke", "#f59e0b");
+                groove.setAttribute("stroke-width", "1");
+                groove.setAttribute("opacity", opacityBeam);
+                svg.appendChild(groove);
+            }
+            
+            // Inserto (linea in basso)
+            const insertH = state.insertThickness * scale / 2;
+            const insertW = state.insertWidth * scale / 1.5;
+            
+            const insertRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            insertRect.setAttribute("x", cx - insertW / 2);
+            insertRect.setAttribute("y", cy + H_px / 2 - insertH);
+            insertRect.setAttribute("width", insertW);
+            insertRect.setAttribute("height", insertH);
+            insertRect.setAttribute("fill", "#fbbf24");
+            insertRect.setAttribute("stroke", "#d97706");
+            insertRect.setAttribute("stroke-width", "1");
+            svg.appendChild(insertRect);
+            
+            // Quote
+            addDimension(svg, cx - B_px / 2 - 20, cy - H_px / 2, cx - B_px / 2 - 20, cy + H_px / 2, state.height.toString());
+            addDimension(svg, cx - B_px / 2, cy + H_px / 2 + 20, cx + B_px / 2, cy + H_px / 2 + 20, state.base.toString());
+        }
+        
+        function addDimension(svg, x1, y1, x2, y2, label) {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+            line.setAttribute("stroke", "#666");
+            line.setAttribute("stroke-width", "1");
+            svg.appendChild(line);
+            
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute("x", (x1 + x2) / 2);
+            text.setAttribute("y", (y1 + y2) / 2 - 5);
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("font-size", "10");
+            text.setAttribute("fill", "#333");
+            text.textContent = label;
+            svg.appendChild(text);
+        }
+        
+        // ============================================
+        // VISUALIZZA TRAVE DEFORMATA
+        // ============================================
+        function drawBeam(result) {
+            const svg = document.getElementById('beamSvg');
+            svg.innerHTML = '';
+            
+            const width = 800;
+            const height = 400;
+            const margin = { left: 80, right: 50, top: 50, bottom: 50 };
+            
+            const nodes = result.nodes;
+            const L = state.length / 1000;
+            
+            // Scala
+            const maxDeflection = Math.max(...nodes.map(n => Math.abs(n.y)));
+            const scaleX = (width - margin.left - margin.right) / L;
+            const scaleY = maxDeflection > 0 ? (height - margin.top - margin.bottom) / 2 / maxDeflection : 100;
+            
+            // Griglia
+            const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            for (let i = 0; i <= 10; i++) {
+                const x = margin.left + i * (width - margin.left - margin.right) / 10;
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", x);
+                line.setAttribute("y1", margin.top);
+                line.setAttribute("x2", x);
+                line.setAttribute("y2", height - margin.bottom);
+                line.setAttribute("stroke", "#e5e7eb");
+                line.setAttribute("stroke-width", "1");
+                grid.appendChild(line);
+            }
+            svg.appendChild(grid);
+            
+            // Linea trave indeformata
+            const refLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            refLine.setAttribute("x1", margin.left);
+            refLine.setAttribute("y1", height / 2);
+            refLine.setAttribute("x2", width - margin.right);
+            refLine.setAttribute("y2", height / 2);
+            refLine.setAttribute("stroke", "#9ca3af");
+            refLine.setAttribute("stroke-width", "2");
+            refLine.setAttribute("stroke-dasharray", "8,4");
+            svg.appendChild(refLine);
+            
+            // Curva deformata
+            let pathD = `M ${margin.left} ${height / 2}`;
+            for (let i = 1; i < nodes.length; i++) {
+                const x = margin.left + nodes[i].x * scaleX;
+                const y = height / 2 - nodes[i].y * scaleY;
+                pathD += ` L ${x} ${y}`;
+            }
+            
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", pathD);
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke", "#c41e3a");
+            path.setAttribute("stroke-width", "3");
+            svg.appendChild(path);
+            
+            // Incastro
+            const fix = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            fix.setAttribute("x", margin.left - 15);
+            fix.setAttribute("y", height / 2 - 40);
+            fix.setAttribute("width", 15);
+            fix.setAttribute("height", 80);
+            fix.setAttribute("fill", "#475569");
+            svg.appendChild(fix);
+            
+            // Freccia forza
+            const tipX = margin.left + L * scaleX;
+            const tipY = height / 2 - nodes[nodes.length - 1].y * scaleY;
+            
+            const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            const arrowLen = 40;
+            arrow.setAttribute("d", `M ${tipX} ${tipY - arrowLen} L ${tipX} ${tipY} M ${tipX - 8} ${tipY - 12} L ${tipX} ${tipY} L ${tipX + 8} ${tipY - 12}`);
+            arrow.setAttribute("stroke", "#22c55e");
+            arrow.setAttribute("stroke-width", "3");
+            arrow.setAttribute("fill", "none");
+            svg.appendChild(arrow);
+            
+            // Label freccia
+            const deflLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            deflLabel.setAttribute("x", tipX + 10);
+            deflLabel.setAttribute("y", tipY);
+            deflLabel.setAttribute("font-size", "12");
+            deflLabel.setAttribute("fill", "#c41e3a");
+            deflLabel.textContent = `δ = ${result.tipDeflection.toFixed(2)} mm`;
+            svg.appendChild(deflLabel);
+        }
+        
+        // ============================================
+        // AGGIORNA RISULTATI UI
+        // ============================================
+        function updateResults(result) {
+            // Freccia
+            document.getElementById('resultDeflection').textContent = result.tipDeflection.toFixed(2) + ' mm';
+            
+            // Tensioni
+            const stressBeamEl = document.getElementById('resultStressBeam');
+            stressBeamEl.textContent = result.stressBeam.toFixed(1) + ' MPa';
+            stressBeamEl.className = 'result-value ' + getStressClass(result.stressBeam, result.finalBeamLimit);
+            
+            const stressInsertEl = document.getElementById('resultStressInsert');
+            stressInsertEl.textContent = result.stressInsert.toFixed(1) + ' MPa';
+            stressInsertEl.className = 'result-value ' + getStressClass(result.stressInsert, result.finalInsertLimit);
+            
+            // Safety Factors
+            const sfBeamEl = document.getElementById('resultSFBeam');
+            sfBeamEl.textContent = result.SF_beam === Infinity ? '∞' : result.SF_beam.toFixed(2);
+            sfBeamEl.className = 'result-value ' + (result.SF_beam >= 1 ? 'ok' : 'danger');
+            
+            const sfInsertEl = document.getElementById('resultSFInsert');
+            sfInsertEl.textContent = result.SF_insert === Infinity ? '∞' : result.SF_insert.toFixed(2);
+            sfInsertEl.className = 'result-value ' + (result.SF_insert >= 1 ? 'ok' : 'danger');
+            
+            // Rotazione
+            document.getElementById('resultRotation').textContent = result.tipRotation_deg.toFixed(3) + ' °';
+            
+            // Frequenza
+            document.getElementById('resultFrequency').textContent = result.f0_Hz.toFixed(2) + ' Hz';
+            
+            // Iterazioni e convergenza
+            document.getElementById('resultIterations').textContent = result.iterations;
+            const convEl = document.getElementById('resultConverged');
+            convEl.textContent = result.converged ? 'Sì' : 'No';
+            convEl.className = 'result-value ' + (result.converged ? 'ok' : 'warning');
+            
+            // Proprietà sezione
+            const props = calculateSectionProperties();
+            document.getElementById('propArea').textContent = props.area.toFixed(1) + ' mm²';
+            document.getElementById('propIx').textContent = props.Ix.toFixed(0) + ' mm⁴';
+            document.getElementById('propWx').textContent = props.Wx.toFixed(1) + ' mm³';
+            document.getElementById('propWeight').textContent = props.weight.toFixed(3) + ' kg/m';
+            
+            // Info materiale
+            const beamMat = MATERIALS[state.beamMaterial];
+            const insertMat = MATERIALS[state.insertMaterial];
+            document.getElementById('matEBeam').textContent = beamMat.E.toFixed(1) + ' GPa';
+            document.getElementById('matYieldBeam').textContent = beamMat.yield + ' MPa';
+            document.getElementById('matNroBeam').textContent = beamMat.n_RO;
+            document.getElementById('matEInsert').textContent = insertMat.E.toFixed(1) + ' GPa';
+            document.getElementById('matYieldInsert').textContent = insertMat.yield + ' MPa';
+        }
+        
+        function getStressClass(stress, limit) {
+            if (stress < limit * 0.7) return 'ok';
+            if (stress < limit) return 'warning';
+            return 'danger';
+        }
+        
+        // ============================================
+        // LEGGI INPUT
+        // ============================================
+        function readInputs() {
+            state.length = parseFloat(document.getElementById('length').value) || 2000;
+            state.base = parseFloat(document.getElementById('base').value) || 40;
+            state.height = parseFloat(document.getElementById('height').value) || 60;
+            state.thickness = parseFloat(document.getElementById('thickness').value) || 2;
+            state.beamMaterial = document.getElementById('beamMaterial').value;
+            state.insertWidth = parseFloat(document.getElementById('insertWidth').value) || 36;
+            state.insertThickness = parseFloat(document.getElementById('insertThickness').value) || 4;
+            state.insertMaterial = document.getElementById('insertMaterial').value;
+            state.forceX = parseFloat(document.getElementById('forceX').value) || 0;
+            state.forceY = parseFloat(document.getElementById('forceY').value) || -500;
+            state.ledGroove = document.getElementById('ledGroove').checked;
+            state.enablePDelta = document.getElementById('enablePDelta').checked;
+            state.enableNonlinear = document.getElementById('enableNonlinear').checked;
+            state.enableShear = document.getElementById('enableShear').checked;
+            state.grooveWidth = parseFloat(document.getElementById('grooveWidth').value) || 12;
+            state.grooveDepth = parseFloat(document.getElementById('grooveDepth').value) || 8;
+        }
+        
+        // ============================================
+        // ESEGUI ANALISI
+        // ============================================
+        function runAnalysis() {
+            document.getElementById('statusText').textContent = 'Calcolo in corso...';
+            
+            readInputs();
+            updateSectionPreview();
+            
+            try {
+                const result = solveBeamSystem();
+                drawBeam(result);
+                updateResults(result);
+                
+                document.getElementById('statusText').textContent = 
+                    `Analisi completata - ${result.iterations} iterazioni - ` +
+                    (result.converged ? 'Convergenza raggiunta' : 'Max iterazioni raggiunte');
+            } catch (e) {
+                document.getElementById('statusText').textContent = 'Errore: ' + e.message;
+                console.error(e);
+            }
+        }
+        
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        document.getElementById('ledGroove').addEventListener('change', function() {
+            document.getElementById('grooveOptions').style.display = this.checked ? 'flex' : 'none';
+            state.ledGroove = this.checked;
+            updateSectionPreview();
+        });
+        
+        // Aggiorna preview in tempo reale
+        ['length', 'base', 'height', 'thickness', 'insertWidth', 'insertThickness', 'grooveWidth', 'grooveDepth'].forEach(id => {
+            document.getElementById(id).addEventListener('input', function() {
+                readInputs();
+                updateSectionPreview();
+            });
+        });
+        
+        // ============================================
+        // INIZIALIZZAZIONE
+        // ============================================
+        window.onload = function() {
+            updateSectionPreview();
+            runAnalysis();
+        };
+    </script>
+</body>
+</html>
