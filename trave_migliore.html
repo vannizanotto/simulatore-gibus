@@ -429,7 +429,12 @@
         const CONSTANTS = {
             gravity: 9.81,
             densityAluminum: 2700,
-            safetyFactor: 1.5
+            safetyFactor: 1.5,
+            poissonRatio: 0.33,           // Poisson's ratio for aluminum
+            shearFactorRect: 5/6,         // Shear area factor k for rectangular sections
+            cantileverLambda1: 1.875,     // First mode eigenvalue for cantilever beam (from characteristic equation)
+            defaultGrooveWidth: 12,       // Default LED groove width in mm
+            defaultGrooveDepth: 8         // Default LED groove depth in mm
         };
 
         // Materials with Ramberg-Osgood parameter n_RO
@@ -654,9 +659,9 @@
                     // Timoshenko shear contribution for short beams
                     if (state.enableShear) {
                         const E_current = inInsert ? E_insert : E_beam;
-                        const G = E_current / (2 * (1 + 0.33)); // Shear modulus (ν ≈ 0.33 for aluminum)
+                        const G = E_current / (2 * (1 + CONSTANTS.poissonRatio)); // Shear modulus
                         const A_current = inInsert ? insertArea_m2 : beamArea_m2;
-                        const A_shear = A_current * 0.833; // Shape factor k ≈ 5/6 for rectangle
+                        const A_shear = A_current * CONSTANTS.shearFactorRect; // Shape factor for rectangle
                         const L_over_H = state.length / beamHeight_m;
                         if (L_over_H < 10) {
                             const shearFactor = 1 + 0.15 * (10 - L_over_H) / 10;
@@ -710,8 +715,8 @@
             const SF_insert = stressInsert > 0 ? finalInsertLimit / stressInsert : 999;
             
             // Natural frequency estimate (first flexural mode)
-            // f₀ = (λ²/2π) * sqrt(EI / (ρA*L⁴)), with λ = 1.875 for cantilever
-            const lambda1 = 1.875;
+            // f₀ = (λ²/2π) * sqrt(EI / (ρA*L⁴)), λ₁ from cantilever characteristic equation: cos(λ)cosh(λ)+1=0
+            const lambda1 = CONSTANTS.cantileverLambda1;
             const rho = CONSTANTS.densityAluminum;
             const f0 = (lambda1 * lambda1 / (2 * Math.PI)) * Math.sqrt(EI_beam / (rho * beamArea_m2 * Math.pow(state.length, 4)));
             
@@ -933,8 +938,8 @@
             
             // LED Groove - simple rectangle (NO BELLY)
             if (state.ledGroove) {
-                const grooveW = (state.grooveWidth || 12) * scale / 10;
-                const grooveH = (state.grooveDepth || 8) * scale / 10;
+                const grooveW = (state.grooveWidth || CONSTANTS.defaultGrooveWidth) * scale / 10;
+                const grooveH = (state.grooveDepth || CONSTANTS.defaultGrooveDepth) * scale / 10;
                 
                 const groove = document.createElementNS("http://www.w3.org/2000/svg", "rect");
                 groove.setAttribute("x", cx - grooveW/2);
