@@ -910,6 +910,174 @@ class BeamSection {
 }
 
 // ============================================================================
+// DATABASE FISSAGGI (Viti e Rivetti)
+// ============================================================================
+const FASTENERS_DB_V4 = {
+    'none':      { diameter: 0, name: 'Nessuno (Solo Colla)' },
+    'screw-m3':  { diameter: 3.2, name: 'Vite M3' },
+    'screw-m4':  { diameter: 4.2, name: 'Vite M4' },
+    'screw-m5':  { diameter: 5.2, name: 'Vite M5' },
+    'screw-m6':  { diameter: 6.2, name: 'Vite M6' },
+    'rivet-3':   { diameter: 3.2, name: 'Rivetto Ø3.2' },
+    'rivet-4':   { diameter: 4.0, name: 'Rivetto Ø4.0' },
+    'rivet-5':   { diameter: 4.8, name: 'Rivetto Ø4.8' },
+    'rivet-6':   { diameter: 6.4, name: 'Rivetto Ø6.4' }
+};
+
+// ============================================================================
+// SEZIONE TRASVERSALE CON FORI (Estende BeamSection)
+// ============================================================================
+class BeamSectionWithHoles extends BeamSection {
+    constructor(params) {
+        super(params);
+        this.numHoles = params.numHoles || 0;
+        this.holeDiameter_mm = params.holeDiameter_mm || 0;
+        this.calculateWithHoles();
+    }
+    
+    calculateWithHoles() {
+        if (this.numHoles === 0 || this.holeDiameter_mm === 0) {
+            this.areaReduction = 0;
+            this.inertiaReduction = 0;
+            this.Kt = 1.0;
+            return;
+        }
+        
+        const d_mm = this.holeDiameter_mm;
+        const n = this.numHoles;
+        const d_m = d_mm / 1000;
+        
+        // Calcolo riduzione area: ΔA = π × (d/2)² × n_fori
+        const holeArea_m2 = Math.PI * Math.pow(d_m / 2, 2);
+        this.areaReduction = holeArea_m2 * n;
+        
+        // Limite riduzione al 30% della parete superiore per evitare calcoli non fisici
+        // (Standard ingegneristico: riduzione sezione > 30% richiede analisi più approfondita)
+        const MAX_AREA_REDUCTION_RATIO = 0.3;
+        const maxReduction = this.A * MAX_AREA_REDUCTION_RATIO;
+        if (this.areaReduction > maxReduction) {
+            this.areaReduction = maxReduction;
+        }
+        
+        // Area ridotta
+        this.A_effective = Math.max(1e-8, this.A - this.areaReduction);
+        
+        // Calcolo riduzione inerzia con teorema di Steiner: ΔI = A_foro × y_hole²
+        // I fori sono sulla faccia superiore, quindi y_hole = H/2 - t_h/2
+        const y_hole = (this.H / 2) - (this.t_h / 2);
+        const inertiaHoleLocal = (Math.PI * Math.pow(d_m, 4)) / 64; // Inerzia locale del foro circolare
+        const inertiaHoleSteiner = holeArea_m2 * Math.pow(y_hole, 2); // Contributo Steiner
+        this.inertiaReduction = n * (inertiaHoleLocal + inertiaHoleSteiner);
+        
+        // Inerzia ridotta
+        this.I_effective = Math.max(1e-14, this.I - this.inertiaReduction);
+        
+        // Fattore concentrazione tensione Kt: Kt = 3.0 - 3.14×(d/W) + 3.667×(d/W)² - 1.527×(d/W)³
+        const W_mm = this.W * 1000;
+        this.Kt = calculateKt(d_mm, W_mm);
+    }
+    
+    // Override per restituire proprietà ridotte
+    getEffectiveArea() {
+        return this.A_effective || this.A;
+    }
+    
+    getEffectiveInertia() {
+        return this.I_effective || this.I;
+    }
+    
+    getStressConcentrationFactor() {
+        return this.Kt || 1.0;
+    }
+}
+
+// ============================================================================
+// FUNZIONI DI SUPPORTO PER CALCOLO FORI
+// ============================================================================
+
+/**
+ * Calcola la riduzione di area e inerzia per i fori
+ * @param {Object} sectionParams - Parametri della sezione (H, W, t_h)
+ * @param {number} numHoles - Numero di fori
+ * @param {number} holeDiameter_mm - Diametro del foro in mm
+ * @returns {Object} - { areaReduction_mm2, inertiaReduction_mm4 }
+ */
+function calculateHoleReduction(sectionParams, numHoles, holeDiameter_mm) {
+    if (numHoles === 0 || holeDiameter_mm === 0) {
+        return { areaReduction_mm2: 0, inertiaReduction_mm4: 0 };
+    }
+    
+    const d = holeDiameter_mm; // mm
+    const n = numHoles;
+    const H_mm = sectionParams.H * 1000; // m -> mm
+    const t_h_mm = sectionParams.t_h * 1000; // m -> mm
+    
+    // Area di un foro: π × (d/2)²
+    const holeArea_mm2 = Math.PI * Math.pow(d / 2, 2);
+    const totalAreaReduction_mm2 = holeArea_mm2 * n;
+    
+    // Posizione Y del foro (sulla faccia superiore)
+    const y_hole_mm = (H_mm / 2) - (t_h_mm / 2);
+    
+    // Inerzia locale del foro: π × d⁴ / 64
+    const inertiaHoleLocal_mm4 = (Math.PI * Math.pow(d, 4)) / 64;
+    
+    // Contributo Steiner: A × y²
+    const inertiaHoleSteiner_mm4 = holeArea_mm2 * Math.pow(y_hole_mm, 2);
+    
+    // Riduzione totale inerzia
+    const totalInertiaReduction_mm4 = n * (inertiaHoleLocal_mm4 + inertiaHoleSteiner_mm4);
+    
+    return {
+        areaReduction_mm2: totalAreaReduction_mm2,
+        inertiaReduction_mm4: totalInertiaReduction_mm4
+    };
+}
+
+/**
+ * Calcola il fattore di concentrazione delle tensioni Kt per foro in piastra
+ * Formula: Kt = 3.0 - 3.14×(d/W) + 3.667×(d/W)² - 1.527×(d/W)³
+ * (Formula di Peterson per piastra forata in trazione)
+ * @param {number} d_mm - Diametro foro in mm
+ * @param {number} W_mm - Larghezza sezione in mm
+ * @returns {number} - Fattore Kt (>=1.0)
+ */
+function calculateKt(d_mm, W_mm) {
+    if (W_mm <= 0 || d_mm <= 0) return 1.0;
+    
+    const ratio = d_mm / W_mm;
+    
+    // Limite rapporto d/W per validità formula (d/W > 0.5 non è fisicamente realistico)
+    const MAX_RATIO = 0.5;
+    const MAX_KT = 3.0; // Valore massimo Kt per foro in piastra infinita
+    if (ratio >= MAX_RATIO) return MAX_KT;
+    
+    const Kt = 3.0 - 3.14 * ratio + 3.667 * Math.pow(ratio, 2) - 1.527 * Math.pow(ratio, 3);
+    
+    return Math.max(1.0, Kt);
+}
+
+/**
+ * Calcola l'inerzia con fori applicati
+ * @param {number} I_base - Inerzia base in m^4
+ * @param {number} areaReduction_m2 - Riduzione area in m^2
+ * @param {number} H_m - Altezza sezione in m
+ * @param {number} t_h_m - Spessore orizzontale in m
+ * @returns {number} - Inerzia ridotta in m^4
+ */
+function calculateInertiaWithHoles(I_base, areaReduction_m2, H_m, t_h_m) {
+    if (areaReduction_m2 <= 0) return I_base;
+    
+    // Posizione Y del foro
+    const y_hole = (H_m / 2) - (t_h_m / 2);
+    
+    // Contributo Steiner della riduzione
+    const inertiaReduction = areaReduction_m2 * Math.pow(y_hole, 2);
+    
+    return Math.max(1e-14, I_base - inertiaReduction);
+}
+
+// ============================================================================
 // ANALISI DI STABILITÀ (Buckling)
 // ============================================================================
 class StabilityAnalysis {
