@@ -654,7 +654,12 @@
             fastenerType: 'screw-m3', fastenerDiameter: 3.2, holeSpacing: 50
         };
 
-        const CONSTANTS = { g: 9.81, startX: 50, groundY: 300, svgWidth: 900, svgHeight: 600, pixelsPerMeter: 180, densityAluminum: 2700 };
+        const CONSTANTS = { 
+            g: 9.81, startX: 50, groundY: 300, svgWidth: 900, svgHeight: 600, pixelsPerMeter: 180, densityAluminum: 2700,
+            // Fatigue analysis constants for stress amplitude/mean estimation
+            FATIGUE_STRESS_AMPLITUDE_RATIO: 0.3,  // σ_a estimated as 30% of max stress
+            FATIGUE_STRESS_MEAN_RATIO: 0.7        // σ_m estimated as 70% of max stress
+        };
 
         const ui = {
             inputs: {
@@ -1895,8 +1900,12 @@
                         }
                     }
                     
-                    // Calculate fatigue safety factor
-                    const fatigueResult = fatigueAnalysis.calculateFatigueSafetyFactor(10, 20); // Nominal stress estimates
+                    // Calculate fatigue safety factor using stress estimates from constants
+                    // σ_a (amplitude) and σ_m (mean) are estimated based on typical cyclic loading
+                    const nominalStress = 50; // Reference nominal stress for estimation
+                    const sigma_a_estimate = nominalStress * CONSTANTS.FATIGUE_STRESS_AMPLITUDE_RATIO;
+                    const sigma_m_estimate = nominalStress * CONSTANTS.FATIGUE_STRESS_MEAN_RATIO;
+                    const fatigueResult = fatigueAnalysis.calculateFatigueSafetyFactor(sigma_a_estimate, sigma_m_estimate);
                     if(ui.displays.valFatigueSf) {
                         const sf = fatigueResult.safetyFactor;
                         if (sf === Infinity || sf > 100) {

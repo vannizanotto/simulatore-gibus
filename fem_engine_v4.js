@@ -298,6 +298,29 @@ const EC9_CONSTANTS = {
 };
 
 // ============================================================================
+// COSTANTI INGEGNERISTICHE PER ANALISI FORI
+// ============================================================================
+const HOLE_ANALYSIS_CONSTANTS = {
+    // Fattore Kt minimo (vincolo fisico: Kt non può essere < 1)
+    MIN_KT_VALUE: 1.0,
+    
+    // Kt massimo per foro in piastra infinita (caso limite)
+    MAX_KT_VALUE: 3.0,
+    
+    // Rapporto d/W massimo per validità formula Peterson
+    MAX_D_W_RATIO: 0.5,
+    
+    // Costante sensibilità intaglio di default per materiali non in tabella
+    DEFAULT_NOTCH_CONSTANT_A: 0.25,
+    
+    // Raggio minimo intaglio per evitare divisione per zero (mm)
+    MIN_NOTCH_RADIUS: 0.1,
+    
+    // Fattore limite fatica per alluminio (σ_e ≈ 0.4 × σ_u)
+    ALUMINUM_FATIGUE_LIMIT_FACTOR: 0.4,
+};
+
+// ============================================================================
 // COSTANTI PETERSON - SENSIBILITÀ ALL'INTAGLIO ALLUMINIO
 // ============================================================================
 const NOTCH_CONSTANTS = {
@@ -350,20 +373,23 @@ class HoleStressAnalysis {
      * @returns {number} Fattore di concentrazione tensioni Kt
      */
     calculateKt_Peterson() {
-        if (this.plateWidth <= 0 || this.holeDiameter <= 0) return 1.0;
+        if (this.plateWidth <= 0 || this.holeDiameter <= 0) {
+            return HOLE_ANALYSIS_CONSTANTS.MIN_KT_VALUE;
+        }
         
         const ratio = this.holeDiameter / this.plateWidth;
         
         // Limite rapporto d/W per validità formula
-        const MAX_RATIO = 0.5;
-        if (ratio >= MAX_RATIO) return 3.0; // Valore massimo
+        if (ratio >= HOLE_ANALYSIS_CONSTANTS.MAX_D_W_RATIO) {
+            return HOLE_ANALYSIS_CONSTANTS.MAX_KT_VALUE;
+        }
         
         const Kt = 3.0 
                    - 3.14 * ratio 
                    + 3.667 * Math.pow(ratio, 2) 
                    - 1.527 * Math.pow(ratio, 3);
         
-        return Math.max(1.0, Kt);
+        return Math.max(HOLE_ANALYSIS_CONSTANTS.MIN_KT_VALUE, Kt);
     }
     
     /**
@@ -650,7 +676,7 @@ class FatigueNotchAnalysis {
             return notchData.a;
         }
         // Default per materiali non in tabella
-        return 0.25;
+        return HOLE_ANALYSIS_CONSTANTS.DEFAULT_NOTCH_CONSTANT_A;
     }
     
     /**
@@ -661,7 +687,7 @@ class FatigueNotchAnalysis {
      */
     calculateNotchSensitivity() {
         const a = this.getMaterialConstant();
-        const r = Math.max(0.1, this.r); // Evita divisione per zero
+        const r = Math.max(HOLE_ANALYSIS_CONSTANTS.MIN_NOTCH_RADIUS, this.r);
         
         const q = 1 / (1 + a / r);
         
@@ -677,7 +703,7 @@ class FatigueNotchAnalysis {
         const q = this.calculateNotchSensitivity();
         const Kf = 1 + q * (this.Kt - 1);
         
-        return Math.max(1.0, Kf);
+        return Math.max(HOLE_ANALYSIS_CONSTANTS.MIN_KT_VALUE, Kf);
     }
     
     /**
@@ -695,7 +721,8 @@ class FatigueNotchAnalysis {
         }
         
         // Limite di fatica approssimato (circa 0.4 × σ_u per alluminio)
-        const Se = material.fatigue_Sf || (material.tensile * 0.4);
+        const Se = material.fatigue_Sf || 
+                   (material.tensile * HOLE_ANALYSIS_CONSTANTS.ALUMINUM_FATIGUE_LIMIT_FACTOR);
         const Su = material.tensile;
         
         // Criterio di Goodman modificato
