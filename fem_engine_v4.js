@@ -789,7 +789,7 @@ class CorotationalBeamElement {
         const { L } = this.getGeometry();
         const E = this.material.E * 1e9;
         const G = this.material.G * 1e9;
-        const A = this.section. A;
+        const A = this.section.A;
         const I = this.section.I;
         
         // Shear correction (Timoshenko)
