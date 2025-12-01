@@ -274,6 +274,659 @@ const PHYSICS_V4 = {
 };
 
 // ============================================================================
+// COSTANTI EUROCODICE 9 (EC9) - COLLEGAMENTI ALLUMINIO
+// ============================================================================
+const EC9_CONSTANTS = {
+    // Coefficienti parziali di sicurezza
+    gamma_M0: 1.10,  // Resistenza sezioni
+    gamma_M1: 1.10,  // Resistenza instabilità
+    gamma_M2: 1.25,  // Resistenza collegamenti
+    
+    // Fattori k1 per bearing
+    k1_edge: 2.5,    // Bullone al bordo
+    k1_inner: 2.5,   // Bullone interno
+    
+    // Distanze minime fori (in diametri del bullone)
+    e1_min: 1.2,     // Dal bordo, direzione carico
+    e2_min: 1.2,     // Dal bordo, perpendicolare al carico
+    p1_min: 2.2,     // Tra fori, direzione carico
+    p2_min: 2.4,     // Tra fori, perpendicolare al carico
+    
+    // Distanze massime fori
+    e1_max_factor: 12,   // e1 ≤ 12*t (t = spessore minore)
+    p1_max_factor: 14,   // p1 ≤ 14*t
+};
+
+// ============================================================================
+// COSTANTI INGEGNERISTICHE PER ANALISI FORI
+// ============================================================================
+const HOLE_ANALYSIS_CONSTANTS = {
+    // Fattore Kt minimo (vincolo fisico: Kt non può essere < 1)
+    MIN_KT_VALUE: 1.0,
+    
+    // Kt massimo per foro in piastra infinita (caso limite)
+    MAX_KT_VALUE: 3.0,
+    
+    // Rapporto d/W massimo per validità formula Peterson
+    MAX_D_W_RATIO: 0.5,
+    
+    // Costante sensibilità intaglio di default per materiali non in tabella
+    DEFAULT_NOTCH_CONSTANT_A: 0.25,
+    
+    // Raggio minimo intaglio per evitare divisione per zero (mm)
+    MIN_NOTCH_RADIUS: 0.1,
+    
+    // Fattore limite fatica per alluminio (σ_e ≈ 0.4 × σ_u)
+    ALUMINUM_FATIGUE_LIMIT_FACTOR: 0.4,
+};
+
+// ============================================================================
+// COSTANTI PETERSON - SENSIBILITÀ ALL'INTAGLIO ALLUMINIO
+// ============================================================================
+const NOTCH_CONSTANTS = {
+    '6060-T4': { a: 0.30, description: '6060 T4 - Bassa resistenza' },
+    '6060-T6': { a: 0.25, description: '6060 T6 - Medio-bassa resistenza' },
+    '6061-T4': { a: 0.28, description: '6061 T4 - Media resistenza' },
+    '6061-T6': { a: 0.20, description: '6061 T6 - Strutturale' },
+    '6063-T6': { a: 0.24, description: '6063 T6 - Estruso' },
+    '6082-T6': { a: 0.18, description: '6082 T6 - Alta resistenza' },
+    '7075-T6': { a: 0.10, description: '7075 T6 - Ergal alta resistenza' },
+    '2024-T3': { a: 0.12, description: '2024 T3 - Avional' },
+    '46100-F': { a: 0.35, description: 'Pressofusione EN AB-46100' },
+    '46000-F': { a: 0.35, description: 'Pressofusione EN AB-46000' },
+    '47100-F': { a: 0.32, description: 'Pressofusione EN AB-47100' },
+    'ZA-27':   { a: 0.15, description: 'Zamak 27' },
+    '42100-T6': { a: 0.22, description: 'Conchiglia EN AB-42100 T6' },
+    '6082-CNC': { a: 0.18, description: '6082 T6 CNC' },
+    '7075-CNC': { a: 0.10, description: '7075 T6 CNC' },
+};
+
+// ============================================================================
+// CLASSE HoleStressAnalysis - ANALISI LOCALE FORO (Peterson/Frocht)
+// ============================================================================
+/**
+ * Analisi dettagliata della zona forata per concentrazione tensioni
+ * Implementa formule di Peterson per foro singolo e correzione Frocht per fori multipli
+ */
+class HoleStressAnalysis {
+    /**
+     * @param {Object} params - Parametri del foro
+     * @param {number} params.d - Diametro foro (mm)
+     * @param {number} params.p - Passo tra fori (mm)
+     * @param {number} params.t - Spessore piastra (mm)
+     * @param {number} params.W - Larghezza piastra (mm)
+     * @param {number} params.n - Numero fori
+     * @param {string} params.material - Chiave materiale (es. '6061-T6')
+     */
+    constructor(params) {
+        this.holeDiameter = params.d || 0;      // mm
+        this.holeSpacing = params.p || 50;      // passo tra fori, mm
+        this.plateThickness = params.t || 3;    // spessore piastra, mm
+        this.plateWidth = params.W || 33;       // larghezza piastra, mm
+        this.numHoles = params.n || 1;          // numero fori
+        this.materialKey = params.material || '6061-T6';
+    }
+    
+    /**
+     * Calcola Kt secondo Peterson per foro singolo in piastra finita
+     * Formula: Kt = 3.0 - 3.14(d/W) + 3.667(d/W)² - 1.527(d/W)³
+     * @returns {number} Fattore di concentrazione tensioni Kt
+     */
+    calculateKt_Peterson() {
+        if (this.plateWidth <= 0 || this.holeDiameter <= 0) {
+            return HOLE_ANALYSIS_CONSTANTS.MIN_KT_VALUE;
+        }
+        
+        const ratio = this.holeDiameter / this.plateWidth;
+        
+        // Limite rapporto d/W per validità formula
+        if (ratio >= HOLE_ANALYSIS_CONSTANTS.MAX_D_W_RATIO) {
+            return HOLE_ANALYSIS_CONSTANTS.MAX_KT_VALUE;
+        }
+        
+        const Kt = 3.0 
+                   - 3.14 * ratio 
+                   + 3.667 * Math.pow(ratio, 2) 
+                   - 1.527 * Math.pow(ratio, 3);
+        
+        return Math.max(HOLE_ANALYSIS_CONSTANTS.MIN_KT_VALUE, Kt);
+    }
+    
+    /**
+     * Calcola correzione Kt per interazione fori multipli (Frocht)
+     * Per p/d > 2: Kt_multi = Kt × [1 + 0.5(d/p)²]
+     * Per p/d ≤ 2: Kt_multi = Kt × [1 + 0.3(d/p)]
+     * @returns {number} Fattore di concentrazione tensioni corretto per fori multipli
+     */
+    calculateKt_MultiHole() {
+        if (this.numHoles <= 1) {
+            return this.calculateKt_Peterson();
+        }
+        
+        const Kt_single = this.calculateKt_Peterson();
+        
+        if (this.holeSpacing <= 0 || this.holeDiameter <= 0) {
+            return Kt_single;
+        }
+        
+        const p_d_ratio = this.holeSpacing / this.holeDiameter;
+        const d_p_ratio = this.holeDiameter / this.holeSpacing;
+        
+        let correctionFactor;
+        if (p_d_ratio > 2) {
+            // Fori distanti: effetto quadratico ridotto
+            correctionFactor = 1 + 0.5 * Math.pow(d_p_ratio, 2);
+        } else {
+            // Fori vicini: effetto lineare più pronunciato
+            correctionFactor = 1 + 0.3 * d_p_ratio;
+        }
+        
+        return Kt_single * correctionFactor;
+    }
+    
+    /**
+     * Restituisce il Kt effettivo combinato
+     * @returns {number} Fattore Kt effettivo
+     */
+    getEffectiveKt() {
+        return this.calculateKt_MultiHole();
+    }
+    
+    /**
+     * Calcola la tensione massima locale attorno al foro
+     * @param {number} sigma_nominal - Tensione nominale (MPa)
+     * @returns {number} Tensione massima locale (MPa)
+     */
+    getMaxLocalStress(sigma_nominal) {
+        return sigma_nominal * this.getEffectiveKt();
+    }
+    
+    /**
+     * Verifica distanze minime EC9
+     * @returns {Object} Risultato verifica distanze
+     */
+    checkEC9Distances() {
+        const d0 = this.holeDiameter; // Diametro foro nominale
+        
+        const results = {
+            p1_required: EC9_CONSTANTS.p1_min * d0,
+            p1_actual: this.holeSpacing,
+            p1_ok: this.holeSpacing >= EC9_CONSTANTS.p1_min * d0,
+            spacing_ratio: this.holeSpacing / d0
+        };
+        
+        return results;
+    }
+}
+
+// ============================================================================
+// CLASSE NetSectionAnalysis - SEZIONE NETTA (EC9)
+// ============================================================================
+/**
+ * Calcolo della sezione netta secondo Eurocodice 9
+ * Implementa A_net, I_net e tensioni sulla sezione netta
+ */
+class NetSectionAnalysis {
+    /**
+     * @param {Object} section - Sezione lorda (BeamSection o BeamSectionWithHoles)
+     * @param {Object} holes - Configurazione fori
+     * @param {number} holes.n - Numero fori
+     * @param {number} holes.d - Diametro foro (mm)
+     * @param {number} holes.y - Posizione Y dei fori rispetto all'asse neutro (mm)
+     * @param {number} holes.t - Spessore nella zona forata (mm)
+     */
+    constructor(section, holes) {
+        this.grossSection = section;
+        this.holes = holes || { n: 0, d: 0, y: 0, t: 0 };
+    }
+    
+    /**
+     * Calcola l'area netta: A_net = A_gross - Σ(n × d × t)
+     * @returns {number} Area netta (m²)
+     */
+    calculateNetArea() {
+        if (this.holes.n === 0 || this.holes.d === 0) {
+            return this.grossSection.A;
+        }
+        
+        const n = this.holes.n;
+        const d_m = this.holes.d / 1000; // mm -> m
+        const t_m = this.holes.t / 1000; // mm -> m
+        
+        // Riduzione area: n × d × t (area rettangolare dei fori)
+        const areaReduction = n * d_m * t_m;
+        
+        return Math.max(1e-8, this.grossSection.A - areaReduction);
+    }
+    
+    /**
+     * Calcola l'inerzia netta con teorema di Steiner esatto
+     * ΔI = Σ(A_foro × y² + I_locale_foro)
+     * @returns {number} Inerzia netta (m⁴)
+     */
+    calculateNetInertia() {
+        if (this.holes.n === 0 || this.holes.d === 0) {
+            return this.grossSection.I;
+        }
+        
+        const n = this.holes.n;
+        const d_m = this.holes.d / 1000; // mm -> m
+        const t_m = this.holes.t / 1000; // mm -> m
+        const y_m = this.holes.y / 1000; // mm -> m (distanza dall'asse neutro)
+        
+        // Area singolo foro (approssimato come rettangolo d × t)
+        const holeArea = d_m * t_m;
+        
+        // Inerzia locale del foro (circa π×d⁴/64 per foro circolare)
+        const holeLocalInertia = (Math.PI * Math.pow(d_m, 4)) / 64;
+        
+        // Contributo Steiner: A × y²
+        const steinerContribution = holeArea * Math.pow(y_m, 2);
+        
+        // Riduzione totale inerzia per tutti i fori
+        const inertiaReduction = n * (holeLocalInertia + steinerContribution);
+        
+        return Math.max(1e-14, this.grossSection.I - inertiaReduction);
+    }
+    
+    /**
+     * Calcola il modulo di resistenza netto
+     * W_net = I_net / y_max
+     * @returns {number} Modulo di resistenza netto (m³)
+     */
+    calculateNetSectionModulus() {
+        const I_net = this.calculateNetInertia();
+        const y_max = this.grossSection.H / 2; // Distanza massima dall'asse neutro
+        
+        return I_net / y_max;
+    }
+    
+    /**
+     * Calcola la tensione sulla sezione netta
+     * σ_net = N/A_net + M×y/I_net
+     * @param {number} M - Momento flettente (N·m)
+     * @param {number} N - Forza assiale (N), positiva a trazione
+     * @returns {Object} Tensioni sulla sezione netta
+     */
+    calculateNetStress(M, N = 0) {
+        const A_net = this.calculateNetArea();
+        const I_net = this.calculateNetInertia();
+        const y_max = this.grossSection.H / 2;
+        
+        const sigma_axial = N / A_net;
+        const sigma_bending = (M * y_max) / I_net;
+        
+        return {
+            sigma_axial: sigma_axial / 1e6,      // MPa
+            sigma_bending: sigma_bending / 1e6,  // MPa
+            sigma_total: (sigma_axial + sigma_bending) / 1e6, // MPa
+            A_net: A_net,
+            I_net: I_net
+        };
+    }
+}
+
+// ============================================================================
+// CLASSE BearingAnalysis - VERIFICA RIFOLLAMENTO (EC9)
+// ============================================================================
+/**
+ * Verifica della resistenza a rifollamento (bearing) secondo Eurocodice 9
+ * F_b,Rd = k1 × α_b × f_u × d × t / γ_M2
+ */
+class BearingAnalysis {
+    /**
+     * @param {Object} fastener - Dati del fissaggio
+     * @param {number} fastener.diameter - Diametro nominale (mm)
+     * @param {number} fastener.f_ub - Resistenza a trazione del bullone (MPa)
+     * @param {Object} plate - Dati della piastra
+     * @param {number} plate.thickness - Spessore (mm)
+     * @param {number} plate.e1 - Distanza dal bordo, direzione carico (mm)
+     * @param {number} plate.p1 - Passo tra fori, direzione carico (mm)
+     * @param {Object} material - Materiale piastra (da MATERIALS_V4)
+     */
+    constructor(fastener, plate, material) {
+        this.d = fastener.diameter || 4;        // mm
+        this.d0 = this.d + 0.5;                 // Diametro foro (d + gioco)
+        this.f_ub = fastener.f_ub || 400;       // MPa
+        this.t = plate.thickness || 3;          // mm
+        this.e1 = plate.e1 || 15;               // mm
+        this.p1 = plate.p1 || 30;               // mm
+        this.material = material;
+    }
+    
+    /**
+     * Calcola il coefficiente α_b secondo EC9
+     * α_b = min(e1/3d₀, p1/3d₀ - 1/4, f_ub/f_u, 1.0)
+     * @returns {number} Coefficiente α_b
+     */
+    calculateAlpha_b() {
+        const f_u = this.material.tensile; // MPa
+        
+        const alpha_e1 = this.e1 / (3 * this.d0);
+        const alpha_p1 = (this.p1 / (3 * this.d0)) - 0.25;
+        const alpha_fub = this.f_ub / f_u;
+        
+        return Math.min(alpha_e1, alpha_p1, alpha_fub, 1.0);
+    }
+    
+    /**
+     * Calcola la resistenza a bearing secondo EC9
+     * F_b,Rd = k1 × α_b × f_u × d × t / γ_M2
+     * @returns {number} Resistenza a bearing (N)
+     */
+    calculateBearingResistance() {
+        const k1 = EC9_CONSTANTS.k1_inner;
+        const alpha_b = this.calculateAlpha_b();
+        const f_u = this.material.tensile * 1e6; // MPa -> Pa
+        const d_m = this.d / 1000;  // mm -> m
+        const t_m = this.t / 1000;  // mm -> m
+        const gamma_M2 = EC9_CONSTANTS.gamma_M2;
+        
+        const F_b_Rd = (k1 * alpha_b * f_u * d_m * t_m) / gamma_M2;
+        
+        return F_b_Rd; // Newton
+    }
+    
+    /**
+     * Verifica a bearing
+     * @param {number} appliedForce - Forza applicata per bullone (N)
+     * @returns {Object} Risultato verifica
+     */
+    checkBearing(appliedForce) {
+        const F_b_Rd = this.calculateBearingResistance();
+        const utilization = appliedForce / F_b_Rd;
+        
+        return {
+            F_b_Rd: F_b_Rd,
+            F_Ed: appliedForce,
+            utilization: utilization,
+            utilizationPercent: utilization * 100,
+            status: utilization <= 1.0 ? 'OK' : 'CRITICO',
+            alpha_b: this.calculateAlpha_b()
+        };
+    }
+}
+
+// ============================================================================
+// CLASSE FatigueNotchAnalysis - FATTORE FATICA PETERSON
+// ============================================================================
+/**
+ * Calcola il fattore di fatica considerando la sensibilità all'intaglio
+ * Basato sulla teoria di Peterson
+ */
+class FatigueNotchAnalysis {
+    /**
+     * @param {string} materialKey - Chiave materiale (es. '6061-T6')
+     * @param {number} Kt - Fattore di concentrazione tensioni teorico
+     * @param {number} notchRadius - Raggio di raccordo dell'intaglio (mm)
+     */
+    constructor(materialKey, Kt, notchRadius) {
+        this.materialKey = materialKey || '6061-T6';
+        this.Kt = Kt || 1.0;
+        this.r = notchRadius || 0.5; // mm, raggio minimo tipico per fori
+    }
+    
+    /**
+     * Ottiene la costante del materiale 'a' dalla tabella
+     * @returns {number} Costante materiale a (mm)
+     */
+    getMaterialConstant() {
+        const notchData = NOTCH_CONSTANTS[this.materialKey];
+        if (notchData) {
+            return notchData.a;
+        }
+        // Default per materiali non in tabella
+        return HOLE_ANALYSIS_CONSTANTS.DEFAULT_NOTCH_CONSTANT_A;
+    }
+    
+    /**
+     * Calcola la sensibilità all'intaglio (Peterson)
+     * q = 1 / (1 + a/r)
+     * dove a = costante materiale, r = raggio intaglio
+     * @returns {number} Sensibilità all'intaglio q (0 ≤ q ≤ 1)
+     */
+    calculateNotchSensitivity() {
+        const a = this.getMaterialConstant();
+        const r = Math.max(HOLE_ANALYSIS_CONSTANTS.MIN_NOTCH_RADIUS, this.r);
+        
+        const q = 1 / (1 + a / r);
+        
+        return Math.max(0, Math.min(1, q));
+    }
+    
+    /**
+     * Calcola il fattore di fatica effettivo (Kf)
+     * Kf = 1 + q × (Kt - 1)
+     * @returns {number} Fattore di fatica Kf
+     */
+    calculateKf() {
+        const q = this.calculateNotchSensitivity();
+        const Kf = 1 + q * (this.Kt - 1);
+        
+        return Math.max(HOLE_ANALYSIS_CONSTANTS.MIN_KT_VALUE, Kf);
+    }
+    
+    /**
+     * Calcola il fattore di sicurezza a fatica
+     * @param {number} sigma_a - Ampiezza tensione alternata (MPa)
+     * @param {number} sigma_m - Tensione media (MPa)
+     * @returns {Object} Risultato analisi fatica
+     */
+    calculateFatigueSafetyFactor(sigma_a, sigma_m = 0) {
+        const Kf = this.calculateKf();
+        const material = MATERIALS_V4[this.materialKey];
+        
+        if (!material) {
+            return { safetyFactor: 1.0, status: 'UNKNOWN' };
+        }
+        
+        // Limite di fatica approssimato (circa 0.4 × σ_u per alluminio)
+        const Se = material.fatigue_Sf || 
+                   (material.tensile * HOLE_ANALYSIS_CONSTANTS.ALUMINUM_FATIGUE_LIMIT_FACTOR);
+        const Su = material.tensile;
+        
+        // Criterio di Goodman modificato
+        // σ_a/Se + σ_m/Su = 1/n
+        const sigma_a_eff = sigma_a * Kf;
+        
+        if (sigma_a_eff <= 0 && sigma_m <= 0) {
+            return { safetyFactor: Infinity, status: 'OK' };
+        }
+        
+        const n = 1 / ((sigma_a_eff / Se) + (Math.abs(sigma_m) / Su));
+        
+        return {
+            safetyFactor: n,
+            Kf: Kf,
+            q: this.calculateNotchSensitivity(),
+            sigma_a_effective: sigma_a_eff,
+            status: n >= 1.5 ? 'OK' : (n >= 1.0 ? 'ATTENZIONE' : 'CRITICO')
+        };
+    }
+}
+
+// ============================================================================
+// CLASSE AdvancedHoleFEM - MESH LOCALE RAFFINATA (Opzionale)
+// ============================================================================
+/**
+ * Mesh 2D raffinata attorno al foro per calcolo tensioni locali
+ * Implementazione semplificata con elementi quadrilateri a 4 nodi
+ */
+class AdvancedHoleFEM {
+    /**
+     * @param {Object} holeParams - Parametri del foro
+     * @param {number} holeParams.d - Diametro foro (mm)
+     * @param {number} holeParams.t - Spessore piastra (mm)
+     * @param {number} holeParams.W - Larghezza zona analizzata (mm)
+     * @param {number} holeParams.H - Altezza zona analizzata (mm)
+     * @param {number} holeParams.E - Modulo elastico (GPa)
+     * @param {number} holeParams.nu - Coefficiente di Poisson
+     */
+    constructor(holeParams) {
+        this.d = holeParams.d || 4;           // mm
+        this.t = holeParams.t || 3;           // mm
+        this.W = holeParams.W || 20;          // mm
+        this.H = holeParams.H || 20;          // mm
+        this.E = (holeParams.E || 70) * 1e3;  // GPa -> MPa
+        this.nu = holeParams.nu || 0.33;
+        
+        this.nodes = [];
+        this.elements = [];
+        this.stresses = [];
+    }
+    
+    /**
+     * Genera mesh raffinata attorno al foro (8-16 elementi)
+     * Schema: elementi radiali attorno al foro + elementi rettangolari esterni
+     * @returns {Object} Mesh generata con nodi ed elementi
+     */
+    generateLocalMesh() {
+        const r = this.d / 2;
+        const numRadial = 8;  // Elementi attorno al foro
+        const numLayers = 2;  // Strati radiali
+        
+        this.nodes = [];
+        this.elements = [];
+        
+        // Genera nodi sul bordo del foro e strati esterni
+        for (let layer = 0; layer <= numLayers; layer++) {
+            const radius = r * (1 + layer * 0.5); // Raggio crescente
+            
+            for (let i = 0; i < numRadial; i++) {
+                const angle = (2 * Math.PI * i) / numRadial;
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+                
+                this.nodes.push({
+                    id: layer * numRadial + i,
+                    x: x,
+                    y: y,
+                    layer: layer,
+                    angle: angle
+                });
+            }
+        }
+        
+        // Genera elementi quadrilateri tra gli strati
+        for (let layer = 0; layer < numLayers; layer++) {
+            for (let i = 0; i < numRadial; i++) {
+                const n1 = layer * numRadial + i;
+                const n2 = layer * numRadial + ((i + 1) % numRadial);
+                const n3 = (layer + 1) * numRadial + ((i + 1) % numRadial);
+                const n4 = (layer + 1) * numRadial + i;
+                
+                this.elements.push({
+                    id: layer * numRadial + i,
+                    nodes: [n1, n2, n3, n4],
+                    layer: layer
+                });
+            }
+        }
+        
+        return {
+            nodes: this.nodes,
+            elements: this.elements,
+            numNodes: this.nodes.length,
+            numElements: this.elements.length
+        };
+    }
+    
+    /**
+     * Risolve problema elastico locale con tensione applicata al bordo
+     * Soluzione analitica di Kirsch per foro circolare in piastra infinita
+     * @param {number} boundaryStress - Tensione nominale applicata (MPa)
+     * @returns {Array} Campo di tensioni negli elementi
+     */
+    solveLocalProblem(boundaryStress) {
+        const sigma_inf = boundaryStress;
+        const a = this.d / 2; // Raggio foro
+        
+        this.stresses = [];
+        
+        // Soluzione di Kirsch per ogni elemento
+        for (const elem of this.elements) {
+            // Centro dell'elemento
+            const nodeIds = elem.nodes;
+            let cx = 0, cy = 0;
+            for (const nid of nodeIds) {
+                cx += this.nodes[nid].x;
+                cy += this.nodes[nid].y;
+            }
+            cx /= 4;
+            cy /= 4;
+            
+            const r = Math.sqrt(cx * cx + cy * cy);
+            const theta = Math.atan2(cy, cx);
+            
+            // Tensioni Kirsch (coordinate polari)
+            const a2_r2 = Math.pow(a / r, 2);
+            const a4_r4 = Math.pow(a / r, 4);
+            
+            // σ_r (radiale)
+            const sigma_r = (sigma_inf / 2) * (1 - a2_r2) + 
+                           (sigma_inf / 2) * (1 - 4 * a2_r2 + 3 * a4_r4) * Math.cos(2 * theta);
+            
+            // σ_θ (tangenziale)
+            const sigma_theta = (sigma_inf / 2) * (1 + a2_r2) - 
+                               (sigma_inf / 2) * (1 + 3 * a4_r4) * Math.cos(2 * theta);
+            
+            // τ_rθ (taglio)
+            const tau_r_theta = -(sigma_inf / 2) * (1 + 2 * a2_r2 - 3 * a4_r4) * Math.sin(2 * theta);
+            
+            // Tensione principale massima
+            const sigma_avg = (sigma_r + sigma_theta) / 2;
+            const R = Math.sqrt(Math.pow((sigma_r - sigma_theta) / 2, 2) + Math.pow(tau_r_theta, 2));
+            const sigma_1 = sigma_avg + R;
+            const sigma_2 = sigma_avg - R;
+            
+            // Von Mises
+            const sigma_vm = Math.sqrt(sigma_1 * sigma_1 - sigma_1 * sigma_2 + sigma_2 * sigma_2);
+            
+            this.stresses.push({
+                elementId: elem.id,
+                r: r,
+                theta: theta,
+                sigma_r: sigma_r,
+                sigma_theta: sigma_theta,
+                tau_r_theta: tau_r_theta,
+                sigma_1: sigma_1,
+                sigma_2: sigma_2,
+                sigma_vonMises: sigma_vm
+            });
+        }
+        
+        return this.stresses;
+    }
+    
+    /**
+     * Estrae la tensione principale massima dalla soluzione
+     * @returns {Object} Tensione massima e sua posizione
+     */
+    getMaxPrincipalStress() {
+        if (this.stresses.length === 0) {
+            return { maxStress: 0, location: null };
+        }
+        
+        let maxStress = 0;
+        let maxElement = null;
+        
+        for (const stress of this.stresses) {
+            if (stress.sigma_1 > maxStress) {
+                maxStress = stress.sigma_1;
+                maxElement = stress;
+            }
+        }
+        
+        return {
+            maxStress: maxStress,
+            maxVonMises: maxElement ? maxElement.sigma_vonMises : 0,
+            location: maxElement ? { r: maxElement.r, theta: maxElement.theta } : null,
+            Kt_computed: maxStress / (this.stresses[0] ? this.stresses[this.stresses.length - 1].sigma_theta : 1)
+        };
+    }
+}
+
+// ============================================================================
 // ALGEBRA LINEARE AVANZATA
 // ============================================================================
 class Matrix {
@@ -932,6 +1585,16 @@ class BeamSectionWithHoles extends BeamSection {
         super(params);
         this.numHoles = params.numHoles || 0;
         this.holeDiameter_mm = params.holeDiameter_mm || 0;
+        this.holeSpacing_mm = params.holeSpacing_mm || 50;   // Passo tra fori
+        this.materialKey = params.materialKey || '6061-T6';
+        this.notchRadius_mm = params.notchRadius_mm || 0.5;  // Raggio raccordo foro
+        
+        // Inizializza analisi avanzate
+        this.holeAnalysis = null;
+        this.netSection = null;
+        this.bearingCheck = null;
+        this.fatigueAnalysis = null;
+        
         this.calculateWithHoles();
     }
     
@@ -975,6 +1638,122 @@ class BeamSectionWithHoles extends BeamSection {
         // Fattore concentrazione tensione Kt: Kt = 3.0 - 3.14×(d/W) + 3.667×(d/W)² - 1.527×(d/W)³
         const W_mm = this.W * 1000;
         this.Kt = calculateKt(d_mm, W_mm);
+    }
+    
+    /**
+     * Esegue analisi avanzata completa dei fori
+     * Integra HoleStressAnalysis, NetSectionAnalysis, BearingAnalysis, FatigueNotchAnalysis
+     */
+    performAdvancedAnalysis() {
+        if (this.numHoles === 0 || this.holeDiameter_mm === 0) {
+            return;
+        }
+        
+        const W_mm = this.W * 1000;
+        const t_mm = this.t_h * 1000;
+        const y_hole_mm = ((this.H / 2) - (this.t_h / 2)) * 1000;
+        
+        // 1. Analisi concentrazione tensioni (Peterson/Frocht)
+        this.holeAnalysis = new HoleStressAnalysis({
+            d: this.holeDiameter_mm,
+            p: this.holeSpacing_mm,
+            t: t_mm,
+            W: W_mm,
+            n: this.numHoles,
+            material: this.materialKey
+        });
+        
+        // 2. Analisi sezione netta (EC9)
+        this.netSection = new NetSectionAnalysis(this, {
+            n: this.numHoles,
+            d: this.holeDiameter_mm,
+            y: y_hole_mm,
+            t: t_mm
+        });
+        
+        // 3. Analisi bearing (rifollamento) - Richiede dati fastener
+        const material = MATERIALS_V4[this.materialKey];
+        if (material) {
+            this.bearingCheck = new BearingAnalysis(
+                { diameter: this.holeDiameter_mm, f_ub: 400 },  // Bullone classe 4.6 default
+                { thickness: t_mm, e1: 15, p1: this.holeSpacing_mm },
+                material
+            );
+        }
+        
+        // 4. Analisi fatica (Peterson notch sensitivity)
+        const Kt_eff = this.holeAnalysis.getEffectiveKt();
+        this.fatigueAnalysis = new FatigueNotchAnalysis(
+            this.materialKey,
+            Kt_eff,
+            this.notchRadius_mm
+        );
+    }
+    
+    /**
+     * Restituisce risultati completi dell'analisi avanzata
+     * @param {number} sigma_nominal - Tensione nominale (MPa) per calcoli locali
+     * @param {number} appliedForcePerBolt - Forza per bullone (N) per verifica bearing
+     * @returns {Object} Risultati completi analisi fori
+     */
+    getAdvancedResults(sigma_nominal = 0, appliedForcePerBolt = 0) {
+        // Esegui analisi se non già fatta
+        if (!this.holeAnalysis) {
+            this.performAdvancedAnalysis();
+        }
+        
+        const results = {
+            // Proprietà base
+            Kt_simple: this.Kt,
+            A_net: this.A_effective,
+            I_net: this.I_effective,
+            
+            // Risultati analisi avanzata
+            Kt_effective: 1.0,
+            Kf: 1.0,
+            sigma_max_local: 0,
+            bearing_utilization: 0,
+            fatigue_safety_factor: Infinity,
+            ec9_distances_ok: true
+        };
+        
+        if (this.holeAnalysis) {
+            results.Kt_effective = this.holeAnalysis.getEffectiveKt();
+            results.sigma_max_local = this.holeAnalysis.getMaxLocalStress(sigma_nominal);
+            results.ec9_distances = this.holeAnalysis.checkEC9Distances();
+            results.ec9_distances_ok = results.ec9_distances.p1_ok;
+        }
+        
+        if (this.netSection) {
+            const netResults = this.netSection.calculateNetStress(0, 0);
+            results.A_net = netResults.A_net;
+            results.I_net = netResults.I_net;
+            results.W_net = this.netSection.calculateNetSectionModulus();
+        }
+        
+        if (this.bearingCheck && appliedForcePerBolt > 0) {
+            const bearingResults = this.bearingCheck.checkBearing(appliedForcePerBolt);
+            results.bearing_utilization = bearingResults.utilizationPercent;
+            results.bearing_status = bearingResults.status;
+            results.F_b_Rd = bearingResults.F_b_Rd;
+        }
+        
+        if (this.fatigueAnalysis) {
+            results.Kf = this.fatigueAnalysis.calculateKf();
+            results.notch_sensitivity = this.fatigueAnalysis.calculateNotchSensitivity();
+            
+            // Calcolo fattore sicurezza fatica con tensione alternata stimata
+            if (sigma_nominal > 0) {
+                const fatigueResults = this.fatigueAnalysis.calculateFatigueSafetyFactor(
+                    sigma_nominal * 0.3,  // Ampiezza stimata (30% della tensione massima)
+                    sigma_nominal * 0.7   // Media stimata
+                );
+                results.fatigue_safety_factor = fatigueResults.safetyFactor;
+                results.fatigue_status = fatigueResults.status;
+            }
+        }
+        
+        return results;
     }
     
     // Override per restituire proprietà ridotte
