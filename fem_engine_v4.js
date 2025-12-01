@@ -517,7 +517,7 @@ class ThermalReductionFactors {
      * @returns {number} Coefficiente di espansione termica (1/K)
      */
     static getAlpha(alpha_20, T) {
-        // L'espansione termica aumenta linearmente di circa 10% ogni 100°C
+        // L'espansione termica aumenta linearmente di circa 0.1% per °C
         const factor = 1 + 0.001 * Math.max(0, T - 20);
         return alpha_20 * factor;
     }
@@ -530,7 +530,7 @@ class ThermalReductionFactors {
      * @returns {number} Conducibilità termica (W/m·K)
      */
     static getThermalConductivity(k_20, T) {
-        // Leggera diminuzione con la temperatura (circa -0.02% per °C)
+        // Leggera diminuzione con la temperatura (circa -0.02% per °C, minimo 85%)
         const factor = Math.max(0.85, 1 - 0.0002 * Math.max(0, T - 20));
         return k_20 * factor;
     }
@@ -563,22 +563,23 @@ function getAlloyType(materialName) {
     const name = materialName.toUpperCase();
     
     // Cast alloys first (EN AB 4xxxx, Zamak) - check before 6xxx due to overlap
-    if (name.includes('EN AB') || name.includes('ZAMAK') || /4[0-9]{4}/.test(name)) {
+    // Use word boundary to match 5-digit cast alloy numbers like 46100, 47100
+    if (name.includes('EN AB') || name.includes('ZAMAK') || /\b4[0-9]{4}\b/.test(name)) {
         return 'cast';
     }
     
-    // Serie 7xxx (es. 7075, Ergal)
-    if (/70\d\d/.test(name) || name.includes('ERGAL')) {
+    // Serie 7xxx (es. 7075, Ergal) - use word boundary for exact matching
+    if (/\b70\d\d\b/.test(name) || name.includes('ERGAL')) {
         return '7xxx';
     }
     
-    // Serie 2xxx (es. 2024, Avional)
-    if (/20\d\d/.test(name) || name.includes('AVIONAL')) {
+    // Serie 2xxx (es. 2024, Avional) - use word boundary for exact matching
+    if (/\b20\d\d\b/.test(name) || name.includes('AVIONAL')) {
         return '2xxx';
     }
     
-    // Serie 6xxx (es. 6060, 6061, 6082, 6063)
-    if (/60\d\d/.test(name) || /6\d\d\d/.test(name)) {
+    // Serie 6xxx (es. 6060, 6061, 6082, 6063) - use word boundary for exact matching
+    if (/\b60\d\d\b/.test(name) || /\b6\d{3}\b/.test(name)) {
         return '6xxx';
     }
     
