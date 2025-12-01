@@ -1120,13 +1120,16 @@ class BeamSection {
      * @returns {number} - Fattore Kt
      */
     calculateStressConcentration(d_hole) {
-        // Fattore Kt per foro in piastra sotto trazione (Peterson)
-        // Approssimazione per foro piccolo rispetto alla larghezza
+        // Fattore Kt per foro in piastra sotto trazione
+        // Riferimento: Peterson's Stress Concentration Factors, 3rd Ed.
+        // Chart 4.1, Eq. (4.1) - Circular hole in infinite plate under tension
+        // Kt = 3.0 - 3.13*(d/W) + 3.66*(d/W)^2 - 1.53*(d/W)^3
+        // Valido per d/W < 0.5 (foro piccolo rispetto alla larghezza)
         const d_w = d_hole / this.W;
-        if (d_w < 0.01) return 1.0;
-        if (d_w > 0.5) return 3.0;  // Limite superiore
+        if (d_w < 0.01) return 1.0;  // Foro trascurabile
+        if (d_w > 0.5) return 3.0;   // Limite superiore (foro troppo grande)
         
-        // Formula di Peterson per foro centrale
+        // Formula di Peterson per foro centrale (Eq. 4.1)
         return 3.0 - 3.13 * d_w + 3.66 * Math.pow(d_w, 2) - 1.53 * Math.pow(d_w, 3);
     }
     
