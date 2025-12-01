@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore FEM Gibus - v4.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .slider-container input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e5e7eb;
+        }
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-neutral-100 min-h-screen">
+    <div class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <header class="bg-white rounded-lg shadow p-4 mb-4">
+            <h1 class="text-2xl font-bold text-neutral-800">Simulatore FEM Strutturale</h1>
+            <p class="text-sm text-neutral-500">Analisi Elementi Finiti per Profili Alluminio - v4.0 ULTRA</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <!-- Pannello Configurazione -->
+            <div class="lg:col-span-1 space-y-4">
+                
+                <!-- Materiale -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Materiale</h2>
+                    <div class="space-y-3">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Lega Alluminio</label>
+                            <select id="input-material" class="w-full p-2 border rounded text-xs bg-white border-neutral-300">
+                                <optgroup label="Leghe 6xxx (Estrusione)">
+                                    <option value="6060-T4">6060 T4</option>
+                                    <option value="6060-T6" selected>6060 T6</option>
+                                    <option value="6061-T4">6061 T4</option>
+                                    <option value="6061-T6">6061 T6</option>
+                                    <option value="6063-T6">6063 T6</option>
+                                    <option value="6082-T6">6082 T6</option>
+                                    <option value="6082-CNC">6082 T6 (CNC)</option>
+                                </optgroup>
+                                <optgroup label="Leghe 7xxx (Alta Resistenza)">
+                                    <option value="7075-T6">7075 T6 (Ergal)</option>
+                                    <option value="7075-CNC">7075 T6 (CNC)</option>
+                                </optgroup>
+                                <optgroup label="Leghe 2xxx">
+                                    <option value="2024-T3">2024 T3 (Avional)</option>
+                                </optgroup>
+                                <optgroup label="Leghe da Fonderia">
+                                    <option value="46100-F">EN AB 46100</option>
+                                    <option value="46000-F">EN AB 46000</option>
+                                    <option value="47100-F">EN AB 47100</option>
+                                    <option value="42100-T6">EN AB 42100 T6</option>
+                                    <option value="ZA-27">Zamak 27</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Temperatura (°C)</label>
+                            <div class="slider-container">
+                                <input type="range" id="input-temperature" min="20" max="500" value="20" class="w-full">
+                                <div class="flex justify-between text-[10px] text-neutral-400">
+                                    <span>20°C</span>
+                                    <span id="temp-value" class="font-mono font-bold text-neutral-600">20°C</span>
+                                    <span>500°C</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="material-info" class="p-2 bg-neutral-50 rounded border border-neutral-200 text-[10px]">
+                            <div class="grid grid-cols-2 gap-1">
+                                <span>E (GPa):</span><span id="mat-E" class="font-mono text-right">--</span>
+                                <span>σy (MPa):</span><span id="mat-yield" class="font-mono text-right">--</span>
+                                <span>k_E (T):</span><span id="mat-kE" class="font-mono text-right">--</span>
+                                <span>k_yield (T):</span><span id="mat-kY" class="font-mono text-right">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Geometria Sezione -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Geometria Sezione</h2>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-neutral-500 uppercase">Larghezza (mm)</label>
+                                <input type="number" id="input-width" value="100" min="20" max="500" class="w-full p-2 border rounded text-xs">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-neutral-500 uppercase">Altezza (mm)</label>
+                                <input type="number" id="input-height" value="50" min="10" max="300" class="w-full p-2 border rounded text-xs">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-neutral-500 uppercase">Sp. Verticale (mm)</label>
+                                <input type="number" id="input-tv" value="3" min="1" max="20" step="0.5" class="w-full p-2 border rounded text-xs">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-neutral-500 uppercase">Sp. Orizzontale (mm)</label>
+                                <input type="number" id="input-th" value="3" min="1" max="20" step="0.5" class="w-full p-2 border rounded text-xs">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configurazione Spalla / Fissaggio -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Configurazione Fissaggio</h2>
+                    <div class="space-y-3">
+                        
+                        <!-- Numero Viti -->
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Numero Viti/Rivetti</label>
+                            <div class="slider-container">
+                                <input type="range" id="input-bolts" min="1" max="10" value="4" class="w-full">
+                                <div class="flex justify-between text-[10px] text-neutral-400">
+                                    <span>1</span>
+                                    <span id="bolts-value" class="font-mono font-bold text-neutral-600">4</span>
+                                    <span>10</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tipo Fissaggio -->
+                        <div class="space-y-1 pt-2 border-t border-neutral-200">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Tipo Fissaggio</label>
+                            <select id="input-fastener-type" class="w-full p-2 border rounded text-xs bg-white border-neutral-300">
+                                <optgroup label="Viti Metriche">
+                                    <option value="M4">M4 (Ø4.5mm)</option>
+                                    <option value="M5">M5 (Ø5.5mm)</option>
+                                    <option value="M6" selected>M6 (Ø6.5mm)</option>
+                                    <option value="M8">M8 (Ø8.5mm)</option>
+                                    <option value="M10">M10 (Ø11mm)</option>
+                                </optgroup>
+                                <optgroup label="Rivetti">
+                                    <option value="R4">Rivetto Ø4</option>
+                                    <option value="R5">Rivetto Ø5</option>
+                                    <option value="R6">Rivetto Ø6</option>
+                                </optgroup>
+                                <optgroup label="Inserti Filettati">
+                                    <option value="I-M4">Inserto M4</option>
+                                    <option value="I-M5">Inserto M5</option>
+                                    <option value="I-M6">Inserto M6</option>
+                                </optgroup>
+                            </select>
+                        </div>
+
+                        <!-- Classe Resistenza (solo per viti) -->
+                        <div id="bolt-grade-container" class="space-y-1">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Classe Resistenza</label>
+                            <select id="input-bolt-grade" class="w-full p-2 border rounded text-xs bg-white border-neutral-300">
+                                <option value="4.8">4.8 (Standard)</option>
+                                <option value="8.8" selected>8.8 (Alta Resist.)</option>
+                                <option value="10.9">10.9 (Molto Alta)</option>
+                                <option value="12.9">12.9 (Massima)</option>
+                            </select>
+                        </div>
+
+                        <!-- Posizione Fori -->
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Posizione Fori</label>
+                            <select id="input-hole-position" class="w-full p-2 border rounded text-xs bg-white border-neutral-300">
+                                <option value="vertical" selected>Pareti Verticali</option>
+                                <option value="horizontal">Parete Sup./Inf.</option>
+                                <option value="both">Entrambe</option>
+                            </select>
+                        </div>
+
+                        <!-- Info Connessione (output) -->
+                        <div id="connection-info" class="mt-2 p-2 bg-neutral-50 rounded border border-neutral-200 text-[10px]">
+                            <div class="font-bold text-neutral-600 mb-1">Verifica Connessione</div>
+                            <div class="flex justify-between">
+                                <span>Resistenza:</span>
+                                <span id="res-connection-resistance" class="font-mono font-bold">-- kN</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Utilizzo:</span>
+                                <span id="res-connection-utilization" class="font-mono">--%</span>
+                            </div>
+                            <div id="badge-connection-status" class="mt-1 text-center px-2 py-1 rounded text-[9px] font-bold bg-green-100 text-green-700">OK</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Carico -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Carico Applicato</h2>
+                    <div class="space-y-3">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-neutral-500 uppercase">Forza (N)</label>
+                            <input type="number" id="input-force" value="5000" min="0" max="100000" step="100" class="w-full p-2 border rounded text-xs">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pulsante Calcola -->
+                <button id="btn-calculate" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors">
+                    Calcola Analisi FEM
+                </button>
+            </div>
+
+            <!-- Pannello Risultati -->
+            <div class="lg:col-span-3 space-y-4">
+                
+                <!-- Risultati Sezione -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Proprietà Sezione</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Area (mm²)</div>
+                            <div id="res-area" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Area Netta (mm²)</div>
+                            <div id="res-area-net" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Inerzia (mm⁴)</div>
+                            <div id="res-inertia" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Inerzia Netta (mm⁴)</div>
+                            <div id="res-inertia-net" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Riduzione I per Fori</div>
+                            <div id="res-inertia-reduction" class="text-lg font-bold text-orange-600 font-mono">--%</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Fattore Kt (Peterson)</div>
+                            <div id="res-kt" class="text-lg font-bold text-orange-600 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Modulo Sezione (mm³)</div>
+                            <div id="res-section-modulus" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Tipo Lega</div>
+                            <div id="res-alloy-type" class="text-lg font-bold text-blue-600 font-mono">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risultati Termici -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Fattori Riduzione Termica (EN 1999-1-2)</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">k_E (Modulo)</div>
+                            <div id="res-kE" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">k_yield (Snerv.)</div>
+                            <div id="res-kY" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">E Effettivo (GPa)</div>
+                            <div id="res-E-eff" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">σy Effettivo (MPa)</div>
+                            <div id="res-yield-eff" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risultati Connessione Bullonata -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Verifica Connessione Bullonata (EN 1993-1-8)</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Resist. Taglio (kN)</div>
+                            <div id="res-shear" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Resist. Rifollam. (kN)</div>
+                            <div id="res-bearing" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Resist. Totale (kN)</div>
+                            <div id="res-total" class="text-lg font-bold text-green-600 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Modo Rottura</div>
+                            <div id="res-failure-mode" class="text-lg font-bold text-neutral-800 font-mono">--</div>
+                        </div>
+                        <div class="p-3 bg-neutral-50 rounded">
+                            <div class="text-[10px] text-neutral-500 uppercase">Utilizzo</div>
+                            <div id="res-utilization" class="text-lg font-bold text-neutral-800 font-mono">--%</div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div id="utilization-bar" class="h-4 bg-neutral-200 rounded-full overflow-hidden">
+                            <div id="utilization-fill" class="h-full bg-green-500 transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-neutral-400 mt-1">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log/Info -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-sm font-bold text-neutral-700 mb-3 border-b pb-2">Log Analisi</h2>
+                    <div id="analysis-log" class="bg-neutral-900 text-green-400 p-4 rounded font-mono text-xs h-48 overflow-y-auto">
+                        <div>FEM Engine v4.0 ULTRA - Ready</div>
+                        <div class="text-neutral-500">Attesa input...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-white rounded-lg shadow p-4 mt-4 text-center text-xs text-neutral-500">
+            <p>Simulatore FEM Strutturale per Gibus SpA - Riferimenti: EN 1999-1-1, EN 1999-1-2, EN 1993-1-8, Peterson's Stress Concentration Factors</p>
+        </footer>
+    </div>
+
+    <script src="fem_engine_v4.js"></script>
+    <script>
+        // State
+        const state = {
+            material: '6060-T6',
+            temperature: 20,
+            width: 100,
+            height: 50,
+            t_v: 3,
+            t_h: 3,
+            bolts: 4,
+            fastenerType: 'M6',
+            boltGrade: '8.8',
+            holePosition: 'vertical',
+            force: 5000
+        };
+
+        // DOM Elements
+        const elements = {
+            material: document.getElementById('input-material'),
+            temperature: document.getElementById('input-temperature'),
+            tempValue: document.getElementById('temp-value'),
+            width: document.getElementById('input-width'),
+            height: document.getElementById('input-height'),
+            tv: document.getElementById('input-tv'),
+            th: document.getElementById('input-th'),
+            bolts: document.getElementById('input-bolts'),
+            boltsValue: document.getElementById('bolts-value'),
+            fastenerType: document.getElementById('input-fastener-type'),
+            boltGrade: document.getElementById('input-bolt-grade'),
+            boltGradeContainer: document.getElementById('bolt-grade-container'),
+            holePosition: document.getElementById('input-hole-position'),
+            force: document.getElementById('input-force'),
+            btnCalculate: document.getElementById('btn-calculate'),
+            log: document.getElementById('analysis-log')
+        };
+
+        // Log function
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+            div.className = type === 'error' ? 'text-red-400' : 
+                           type === 'success' ? 'text-green-400' : 
+                           type === 'warning' ? 'text-yellow-400' : 'text-neutral-300';
+            div.textContent = `[${timestamp}] ${message}`;
+            elements.log.appendChild(div);
+            elements.log.scrollTop = elements.log.scrollHeight;
+        }
+
+        // Update material info display
+        function updateMaterialInfo() {
+            const mat = MATERIALS_V4[state.material];
+            if (!mat) return;
+
+            const alloyType = ThermalReductionFactors.getAlloyType(mat.name);
+            const kE = ThermalReductionFactors.getE_factor(state.temperature);
+            const kY = ThermalReductionFactors.getYield_factor(state.temperature, alloyType);
+
+            document.getElementById('mat-E').textContent = mat.E.toFixed(1);
+            document.getElementById('mat-yield').textContent = mat.yield;
+            document.getElementById('mat-kE').textContent = kE.toFixed(3);
+            document.getElementById('mat-kY').textContent = kY.toFixed(3);
+        }
+
+        // Show/hide bolt grade based on fastener type
+        function updateBoltGradeVisibility() {
+            const fastener = FASTENERS_DB[state.fastenerType];
+            if (fastener && fastener.type === 'bolt') {
+                elements.boltGradeContainer.style.display = 'block';
+            } else {
+                elements.boltGradeContainer.style.display = 'none';
+            }
+        }
+
+        // Main calculation function
+        function calculate() {
+            log('Avvio analisi FEM...', 'info');
+
+            try {
+                const mat = MATERIALS_V4[state.material];
+                if (!mat) {
+                    log('Errore: Materiale non trovato', 'error');
+                    return;
+                }
+
+                // Create section with holes
+                const section = new BeamSection({
+                    width: state.width / 1000,  // Convert to meters
+                    height: state.height / 1000,
+                    t_v: state.t_v / 1000,
+                    t_h: state.t_h / 1000,
+                    hasHoles: true,
+                    holeCount: state.bolts,
+                    fastenerType: state.fastenerType,
+                    holePosition: state.holePosition
+                });
+
+                log(`Sezione creata: ${state.width}x${state.height}mm, ${state.bolts} fori ${state.fastenerType}`);
+
+                // Get thermal factors
+                const alloyType = ThermalReductionFactors.getAlloyType(mat.name);
+                const kE = ThermalReductionFactors.getE_factor(state.temperature);
+                const kY = ThermalReductionFactors.getYield_factor(state.temperature, alloyType);
+
+                log(`Tipo lega: ${alloyType}, k_E=${kE.toFixed(3)}, k_yield=${kY.toFixed(3)}`);
+
+                // Display section results
+                document.getElementById('res-area').textContent = (section.A * 1e6).toFixed(1);
+                document.getElementById('res-area-net').textContent = (section.A_net * 1e6).toFixed(1);
+                document.getElementById('res-inertia').textContent = (section.I * 1e12).toFixed(0);
+                document.getElementById('res-inertia-net').textContent = (section.I_net * 1e12).toFixed(0);
+                
+                const inertiaReduction = ((section.I - section.I_net) / section.I * 100);
+                document.getElementById('res-inertia-reduction').textContent = inertiaReduction.toFixed(2) + '%';
+                document.getElementById('res-kt').textContent = section.Kt.toFixed(3);
+                document.getElementById('res-section-modulus').textContent = (section.S * 1e9).toFixed(0);
+                document.getElementById('res-alloy-type').textContent = alloyType;
+
+                // Display thermal results
+                document.getElementById('res-kE').textContent = kE.toFixed(3);
+                document.getElementById('res-kY').textContent = kY.toFixed(3);
+                document.getElementById('res-E-eff').textContent = (mat.E * kE).toFixed(1);
+                document.getElementById('res-yield-eff').textContent = (mat.yield * kY).toFixed(0);
+
+                // Bolted connection check
+                const connectionCheck = new BoltedConnectionCheck(
+                    state.fastenerType,
+                    state.boltGrade,
+                    state.bolts,
+                    mat
+                );
+
+                const t_plate = state.t_v / 1000;  // Use vertical wall thickness
+                const checkResult = connectionCheck.checkConnection(state.force, t_plate);
+
+                log(`Verifica connessione: F_app=${state.force}N, F_Rd=${(checkResult.totalResistance/1000).toFixed(1)}kN`);
+
+                // Display connection results
+                document.getElementById('res-shear').textContent = (checkResult.shearResistance / 1000).toFixed(2);
+                document.getElementById('res-bearing').textContent = (checkResult.bearingResistance / 1000).toFixed(2);
+                document.getElementById('res-total').textContent = (checkResult.totalResistance / 1000).toFixed(2);
+                document.getElementById('res-failure-mode').textContent = checkResult.failureMode === 'shear' ? 'Taglio' : 'Rifollamento';
+                
+                const utilizationPct = (checkResult.utilization * 100);
+                document.getElementById('res-utilization').textContent = utilizationPct.toFixed(1) + '%';
+                
+                // Update sidebar connection info
+                document.getElementById('res-connection-resistance').textContent = (checkResult.totalResistance / 1000).toFixed(1) + ' kN';
+                document.getElementById('res-connection-utilization').textContent = utilizationPct.toFixed(0) + '%';
+                
+                // Update utilization bar
+                const fillEl = document.getElementById('utilization-fill');
+                fillEl.style.width = Math.min(100, utilizationPct) + '%';
+                
+                if (checkResult.isOk) {
+                    fillEl.className = 'h-full transition-all duration-300 ' + 
+                        (utilizationPct < 50 ? 'bg-green-500' : utilizationPct < 80 ? 'bg-yellow-500' : 'bg-orange-500');
+                    document.getElementById('badge-connection-status').className = 'mt-1 text-center px-2 py-1 rounded text-[9px] font-bold bg-green-100 text-green-700';
+                    document.getElementById('badge-connection-status').textContent = 'OK';
+                    log(`✓ Connessione verificata (${utilizationPct.toFixed(0)}%)`, 'success');
+                } else {
+                    fillEl.className = 'h-full bg-red-500 transition-all duration-300';
+                    document.getElementById('badge-connection-status').className = 'mt-1 text-center px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-700';
+                    document.getElementById('badge-connection-status').textContent = 'NON OK';
+                    log(`✗ Connessione NON verificata (${utilizationPct.toFixed(0)}%)`, 'error');
+                }
+
+                log('Analisi completata', 'success');
+
+            } catch (error) {
+                log(`Errore: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        // Event listeners
+        elements.material.addEventListener('change', (e) => {
+            state.material = e.target.value;
+            updateMaterialInfo();
+        });
+
+        elements.temperature.addEventListener('input', (e) => {
+            state.temperature = parseInt(e.target.value);
+            elements.tempValue.textContent = state.temperature + '°C';
+            updateMaterialInfo();
+        });
+
+        elements.width.addEventListener('change', (e) => {
+            state.width = parseFloat(e.target.value);
+        });
+
+        elements.height.addEventListener('change', (e) => {
+            state.height = parseFloat(e.target.value);
+        });
+
+        elements.tv.addEventListener('change', (e) => {
+            state.t_v = parseFloat(e.target.value);
+        });
+
+        elements.th.addEventListener('change', (e) => {
+            state.t_h = parseFloat(e.target.value);
+        });
+
+        elements.bolts.addEventListener('input', (e) => {
+            state.bolts = parseInt(e.target.value);
+            elements.boltsValue.textContent = state.bolts;
+        });
+
+        elements.fastenerType.addEventListener('change', (e) => {
+            state.fastenerType = e.target.value;
+            updateBoltGradeVisibility();
+        });
+
+        elements.boltGrade.addEventListener('change', (e) => {
+            state.boltGrade = e.target.value;
+        });
+
+        elements.holePosition.addEventListener('change', (e) => {
+            state.holePosition = e.target.value;
+        });
+
+        elements.force.addEventListener('change', (e) => {
+            state.force = parseFloat(e.target.value);
+        });
+
+        elements.btnCalculate.addEventListener('click', calculate);
+
+        // Initialize
+        updateMaterialInfo();
+        updateBoltGradeVisibility();
+        log('Sistema inizializzato. Premi "Calcola Analisi FEM" per avviare.', 'info');
+    </script>
+</body>
+</html>
