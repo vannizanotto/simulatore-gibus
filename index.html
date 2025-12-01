@@ -613,6 +613,9 @@
 
     </div>
 
+    <!-- MOTORE FEM v4.0 - Classi avanzate per analisi fori (caricato PRIMA del codice inline) -->
+    <script src="fem_engine_v4.js"></script>
+    
     <script>
         const MATERIALS = {
             '6060-T4': { E: 68.0, yield: 65, tensile: 130, name: "6060 T4" },
@@ -1493,6 +1496,111 @@
                 } 
             }
 
+            // ===== INTEGRAZIONE ANALISI AVANZATA FORI (EC9/Peterson) =====
+            // Calcolo sezione netta e fattori di concentrazione tensioni
+            const fastenerData = FASTENERS_DB[state.fastenerType] || { diameter: 0 };
+            const holeDiameter_mm = state.fastenerDiameter || fastenerData.diameter;
+            const numHoles = state.numBolts;
+            const penetration_mm = state.penetration * 10; // cm -> mm
+            const holeSpacing_mm = numHoles > 1 ? penetration_mm / (numHoles - 1) : penetration_mm;
+            
+            // Parametri sezione in mm
+            const beamParams_mm = {
+                H: beamHeight_m * 1000,
+                W: state.width * 10,    // cm -> mm
+                t_h: state.thicknessH,  // già in mm
+                t_v: state.thicknessV   // già in mm
+            };
+            
+            const insertParams_mm = {
+                H: H_crit_m * 1000,
+                W: state.insertWidth * 10, // cm -> mm
+                t_h: state.insertFlangeT || 8,
+                t_v: state.insertWebT || 6
+            };
+            
+            // Variabili per inerzia netta e fattori Kt
+            let I_beam_net = I_beam;
+            let I_insert_net = I_insert_crit;
+            let A_beam_net = beamArea_m2;
+            let Kt_beam = 1.0;
+            let Kt_insert = 1.0;
+            let Kf_beam = 1.0;
+            let Kf_insert = 1.0;
+            let beamHoleAnalysis = null;
+            let insertHoleAnalysis = null;
+            let beamFatigue = null;
+            let insertFatigue = null;
+            let beamBearing = null;
+            
+            // Applica analisi avanzata solo se ci sono fori
+            if (holeDiameter_mm > 0 && state.fastenerType !== 'none' && typeof HoleStressAnalysis !== 'undefined') {
+                try {
+                    // Analisi concentrazione tensioni per trave (Peterson + Frocht)
+                    beamHoleAnalysis = new HoleStressAnalysis({
+                        d: holeDiameter_mm,
+                        p: holeSpacing_mm,
+                        t: beamParams_mm.t_h,
+                        W: beamParams_mm.W,
+                        n: numHoles,
+                        material: state.beamMatKey
+                    });
+                    
+                    insertHoleAnalysis = new HoleStressAnalysis({
+                        d: holeDiameter_mm,
+                        p: holeSpacing_mm,
+                        t: insertParams_mm.t_h,
+                        W: insertParams_mm.W,
+                        n: numHoles,
+                        material: state.insertMatKey
+                    });
+                    
+                    // Kt effettivi
+                    Kt_beam = beamHoleAnalysis.getEffectiveKt();
+                    Kt_insert = insertHoleAnalysis.getEffectiveKt();
+                    
+                    // Analisi sezione netta (EC9) per trave
+                    if (typeof NetSectionAnalysis !== 'undefined') {
+                        const y_hole_beam = (beamParams_mm.H / 2) - (beamParams_mm.t_h / 2);
+                        const beamNetSection = new NetSectionAnalysis(
+                            { A: beamArea_m2, I: I_beam, H: beamHeight_m },
+                            { n: numHoles, d: holeDiameter_mm, y: y_hole_beam, t: beamParams_mm.t_h }
+                        );
+                        I_beam_net = beamNetSection.calculateNetInertia();
+                        A_beam_net = beamNetSection.calculateNetArea();
+                        
+                        const y_hole_insert = (insertParams_mm.H / 2) - (insertParams_mm.t_h / 2);
+                        const insertNetSection = new NetSectionAnalysis(
+                            { A: beamArea_m2, I: I_insert_crit, H: H_crit_m },
+                            { n: numHoles, d: holeDiameter_mm, y: y_hole_insert, t: insertParams_mm.t_h }
+                        );
+                        I_insert_net = insertNetSection.calculateNetInertia();
+                    }
+                    
+                    // Analisi fatica (Peterson notch sensitivity)
+                    if (typeof FatigueNotchAnalysis !== 'undefined') {
+                        beamFatigue = new FatigueNotchAnalysis(state.beamMatKey, Kt_beam, holeDiameter_mm / 4);
+                        insertFatigue = new FatigueNotchAnalysis(state.insertMatKey, Kt_insert, holeDiameter_mm / 4);
+                        Kf_beam = beamFatigue.calculateKf();
+                        Kf_insert = insertFatigue.calculateKf();
+                    }
+                    
+                    // Analisi bearing (preparata, calcolo effettivo in drawSystem)
+                    if (typeof BearingAnalysis !== 'undefined' && typeof MATERIALS_V4 !== 'undefined') {
+                        const matBeamData = MATERIALS_V4[state.beamMatKey] || MATERIALS[state.beamMatKey];
+                        if (matBeamData) {
+                            beamBearing = new BearingAnalysis(
+                                { diameter: holeDiameter_mm, f_ub: 400 },
+                                { thickness: beamParams_mm.t_h, e1: 15, p1: holeSpacing_mm },
+                                matBeamData
+                            );
+                        }
+                    }
+                } catch(e) {
+                    console.warn("Advanced hole analysis error:", e);
+                }
+            }
+
             // --- FATTORE TEMPERATURA ---
             // Modulo di elasticità: diminuisce di circa 0.04% per grado sopra i 20°C (approx lineare)
             // Snervamento: diminuisce di circa 0.15% per grado sopra i 20°C (approx lineare)
@@ -1662,16 +1770,59 @@
                  }
             }
 
-            // Risultati
+            // Risultati - Calcolo tensioni usando sezione netta
             const momentWall = nodes[0].moment; 
-            const stressInsert = (momentWall * (H_crit_m / 2)) / I_insert_crit;
+            
+            // Tensione nominale sull'inserto (usando inerzia netta)
+            const stressInsert_nominal = (momentWall * (H_crit_m / 2)) / I_insert_net;
+            // Tensione locale massima = nominale × Kt
+            const stressInsert_local = stressInsert_nominal * Kt_insert;
+            
             const startBeamIndex = Math.floor((distWall_m + penetration_m) / ds);
             let maxMomentBeam = 0;
             for(let i=startBeamIndex; i<=numSegments; i++) {
                 if(nodes[i].moment > maxMomentBeam) maxMomentBeam = nodes[i].moment;
             }
             if (maxMomentBeam === 0 && startBeamIndex < numSegments) maxMomentBeam = nodes[startBeamIndex].moment;
-            const stressBeam = (maxMomentBeam * (beamHeight_m / 2)) / I_beam;
+            
+            // Tensione nominale sulla trave (usando inerzia netta nella zona forata)
+            const stressBeam_nominal = (maxMomentBeam * (beamHeight_m / 2)) / I_beam_net;
+            // Tensione locale massima = nominale × Kt
+            const stressBeam_local = stressBeam_nominal * Kt_beam;
+            
+            // Per retrocompatibilità: stress nominale per calcoli tradizionali
+            const stressBeam = stressBeam_nominal;
+            const stressInsert = stressInsert_nominal;
+            
+            // Calcolo forza per bullone (per bearing)
+            const totalForce = state.mode === 'mass' ? state.mass * CONSTANTS.g : state.pulleyForce;
+            const forcePerBolt = numHoles > 0 ? totalForce / numHoles : 0;
+            
+            // Risultato bearing
+            let bearingUtilization = 0;
+            if (beamBearing && forcePerBolt > 0) {
+                try {
+                    const bearingResult = beamBearing.checkBearing(forcePerBolt);
+                    bearingUtilization = bearingResult.utilizationPercent;
+                } catch(e) {
+                    console.warn("Bearing calculation error:", e);
+                }
+            }
+            
+            // Calcolo fattore sicurezza fatica
+            let fatigueSafetyFactor = Infinity;
+            if (beamFatigue && stressBeam_local > 0) {
+                try {
+                    const sigma_local_MPa = stressBeam_local / 1e6;
+                    const fatigueResult = beamFatigue.calculateFatigueSafetyFactor(
+                        sigma_local_MPa * CONSTANTS.FATIGUE_STRESS_AMPLITUDE_RATIO,
+                        sigma_local_MPa * CONSTANTS.FATIGUE_STRESS_MEAN_RATIO
+                    );
+                    fatigueSafetyFactor = fatigueResult.safetyFactor;
+                } catch(e) {
+                    console.warn("Fatigue calculation error:", e);
+                }
+            }
 
             // Per reporting UI
             const finalBeamLimit = beamYieldEff;
@@ -1682,12 +1833,19 @@
             return { 
                 nodes, residualNodes,
                 momentBeam: maxMomentBeam, momentWall, stressBeam, stressInsert, 
+                // Nuovi valori per analisi avanzata fori
+                stressBeam_nominal, stressBeam_local,
+                stressInsert_nominal, stressInsert_local,
+                Kt_beam, Kt_insert, Kf_beam, Kf_insert,
+                I_beam_net, I_insert_net, A_beam_net,
+                bearingUtilization, fatigueSafetyFactor, forcePerBolt,
                 tipNode: nodes[numSegments], residualTipNode: residualNodes[numSegments],
                 distWall_m, penetration_m, pulleyPos: {x: pulleyX, y: pulleyY},
                 forces: { x: finalFx, y: finalFy }, I_beam_val: I_beam, I_insert_val: I_insert_crit,
                 beamWeightPerMeter,
                 finalBeamLimit, finalInsertLimit,
-                finalBeamTensile, finalInsertTensile
+                finalBeamTensile, finalInsertTensile,
+                holeDiameter_mm, numHoles
             };
         }
 
@@ -1829,107 +1987,12 @@
             if(ui.displays.valAreaReductionBeam) ui.displays.valAreaReductionBeam.textContent = areaReductionBeam.toFixed(2) + " mm²";
             if(ui.displays.valAreaReductionInsert) ui.displays.valAreaReductionInsert.textContent = areaReductionInsert.toFixed(2) + " mm²";
 
-            // === ADVANCED HOLE ANALYSIS (EC9/Peterson) ===
-            // Calculate hole spacing based on penetration length and number of holes
+            // Nota: L'analisi avanzata dei fori (EC9/Peterson) è ora integrata in solveBeamSystem()
+            // e i risultati sono visualizzati in drawSystem() - non duplicare qui
+            
+            // Aggiornamento hole spacing per stato
             const penetration_mm = state.penetration * 10; // cm -> mm
             state.holeSpacing = state.numBolts > 1 ? penetration_mm / (state.numBolts - 1) : penetration_mm;
-            
-            // Use the advanced analysis classes from fem_engine_v4.js
-            if (typeof HoleStressAnalysis !== 'undefined' && state.fastenerType !== 'none') {
-                try {
-                    const W_mm = state.width * 10; // cm -> mm
-                    const t_mm = state.thicknessH; // mm
-                    
-                    // Create hole stress analysis
-                    const holeAnalysis = new HoleStressAnalysis({
-                        d: state.fastenerDiameter,
-                        p: state.holeSpacing,
-                        t: t_mm,
-                        W: W_mm,
-                        n: state.numBolts,
-                        material: state.beamMatKey
-                    });
-                    
-                    // Create fatigue notch analysis
-                    const Kt_eff = holeAnalysis.getEffectiveKt();
-                    const fatigueAnalysis = new FatigueNotchAnalysis(
-                        state.beamMatKey,
-                        Kt_eff,
-                        0.5  // Default notch radius
-                    );
-                    
-                    // Update displays
-                    if(ui.displays.valKtEffective) {
-                        ui.displays.valKtEffective.textContent = Kt_eff.toFixed(2);
-                        // Color coding for Kt
-                        if (Kt_eff > 2.5) ui.displays.valKtEffective.className = "font-mono font-bold text-red-600";
-                        else if (Kt_eff > 2.0) ui.displays.valKtEffective.className = "font-mono font-bold text-yellow-600";
-                        else ui.displays.valKtEffective.className = "font-mono font-bold text-amber-900";
-                    }
-                    
-                    const Kf = fatigueAnalysis.calculateKf();
-                    if(ui.displays.valKfFatigue) {
-                        ui.displays.valKfFatigue.textContent = Kf.toFixed(2);
-                        if (Kf > 2.0) ui.displays.valKfFatigue.className = "font-mono font-bold text-red-600";
-                        else if (Kf > 1.5) ui.displays.valKfFatigue.className = "font-mono font-bold text-yellow-600";
-                        else ui.displays.valKfFatigue.className = "font-mono font-bold text-amber-900";
-                    }
-                    
-                    // Calculate bearing resistance if available
-                    if (typeof BearingAnalysis !== 'undefined') {
-                        const matBeamData = MATERIALS_V4 ? MATERIALS_V4[state.beamMatKey] : MATERIALS[state.beamMatKey];
-                        if (matBeamData) {
-                            const bearingCheck = new BearingAnalysis(
-                                { diameter: state.fastenerDiameter, f_ub: 400 },
-                                { thickness: t_mm, e1: 15, p1: state.holeSpacing },
-                                matBeamData
-                            );
-                            
-                            // Estimate applied force per bolt (simplified: assume 10% of total force)
-                            const totalForce = state.mode === 'mass' ? state.mass * 9.81 : state.pulleyForce;
-                            const forcePerBolt = totalForce / state.numBolts;
-                            
-                            const bearingResult = bearingCheck.checkBearing(forcePerBolt);
-                            if(ui.displays.valBearingUtil) {
-                                const util = Math.min(999, bearingResult.utilizationPercent);
-                                ui.displays.valBearingUtil.textContent = util.toFixed(0);
-                                if (util > 100) ui.displays.valBearingUtil.className = "font-mono font-bold text-red-600";
-                                else if (util > 80) ui.displays.valBearingUtil.className = "font-mono font-bold text-yellow-600";
-                                else ui.displays.valBearingUtil.className = "font-mono font-bold text-amber-900";
-                            }
-                        }
-                    }
-                    
-                    // Calculate fatigue safety factor using stress estimates from constants
-                    // σ_a (amplitude) and σ_m (mean) are estimated based on typical cyclic loading
-                    const nominalStress = 50; // Reference nominal stress for estimation
-                    const sigma_a_estimate = nominalStress * CONSTANTS.FATIGUE_STRESS_AMPLITUDE_RATIO;
-                    const sigma_m_estimate = nominalStress * CONSTANTS.FATIGUE_STRESS_MEAN_RATIO;
-                    const fatigueResult = fatigueAnalysis.calculateFatigueSafetyFactor(sigma_a_estimate, sigma_m_estimate);
-                    if(ui.displays.valFatigueSf) {
-                        const sf = fatigueResult.safetyFactor;
-                        if (sf === Infinity || sf > 100) {
-                            ui.displays.valFatigueSf.textContent = "∞";
-                            ui.displays.valFatigueSf.className = "font-mono font-bold text-green-700";
-                        } else {
-                            ui.displays.valFatigueSf.textContent = sf.toFixed(1);
-                            if (sf < 1.0) ui.displays.valFatigueSf.className = "font-mono font-bold text-red-600";
-                            else if (sf < 1.5) ui.displays.valFatigueSf.className = "font-mono font-bold text-yellow-600";
-                            else ui.displays.valFatigueSf.className = "font-mono font-bold text-green-700";
-                        }
-                    }
-                    
-                } catch(e) {
-                    console.log("Advanced analysis not available:", e);
-                }
-            } else {
-                // No fasteners - reset displays
-                if(ui.displays.valKtEffective) ui.displays.valKtEffective.textContent = "1.00";
-                if(ui.displays.valKfFatigue) ui.displays.valKfFatigue.textContent = "1.00";
-                if(ui.displays.valSigmaLocal) ui.displays.valSigmaLocal.textContent = "0";
-                if(ui.displays.valBearingUtil) ui.displays.valBearingUtil.textContent = "0";
-                if(ui.displays.valFatigueSf) ui.displays.valFatigueSf.textContent = "∞";
-            }
 
             // Aggiornamento display per pannelli avanzati
             if(ui.displays.valInsertFlange) ui.displays.valInsertFlange.textContent = state.insertFlangeT + " mm";
@@ -1965,7 +2028,14 @@
         }
 
         function drawSystem(physics) {
-            const { nodes, residualNodes, momentBeam, momentWall, stressBeam, stressInsert, tipNode, residualTipNode, distWall_m, penetration_m, pulleyPos, forces, I_beam_val, I_insert_val, beamWeightPerMeter, finalBeamLimit, finalInsertLimit, finalBeamTensile, finalInsertTensile } = physics;
+            const { nodes, residualNodes, momentBeam, momentWall, stressBeam, stressInsert, tipNode, residualTipNode, distWall_m, penetration_m, pulleyPos, forces, I_beam_val, I_insert_val, beamWeightPerMeter, finalBeamLimit, finalInsertLimit, finalBeamTensile, finalInsertTensile,
+                    // Nuovi valori per analisi avanzata fori
+                    stressBeam_nominal, stressBeam_local, stressInsert_nominal, stressInsert_local,
+                    Kt_beam, Kt_insert, Kf_beam, Kf_insert,
+                    I_beam_net, I_insert_net, A_beam_net,
+                    bearingUtilization, fatigueSafetyFactor, forcePerBolt,
+                    holeDiameter_mm, numHoles
+            } = physics;
             const pxPerM = CONSTANTS.pixelsPerMeter;
             const startX = CONSTANTS.startX;
             const startY = CONSTANTS.groundY;
@@ -2076,52 +2146,113 @@
             // --- AGGIORNAMENTO RISULTATI UI ---
             const matInsert = MATERIALS[state.insertMatKey];
             const matBeam = MATERIALS[state.beamMatKey];
-            const beamStressMPa = stressBeam / 1e6;
-            const insertStressMPa = stressInsert / 1e6;
+            
+            // Usa tensione locale (con Kt) come valore critico se ci sono fori
+            const hasHoles = holeDiameter_mm > 0 && state.fastenerType !== 'none';
+            const beamStressMPa_display = hasHoles ? (stressBeam_local / 1e6) : (stressBeam / 1e6);
+            const insertStressMPa_display = hasHoles ? (stressInsert_local / 1e6) : (stressInsert / 1e6);
+            const beamStressMPa_nominal = stressBeam / 1e6;
+            const insertStressMPa_nominal = stressInsert / 1e6;
             
             if (ui.displays.resBeamStress) {
-                ui.displays.resBeamStress.textContent = beamStressMPa.toFixed(1);
-                if (ui.displays.resLimitBeamYield) ui.displays.resLimitBeamYield.textContent = finalBeamLimit.toFixed(0); // Usa il limite termico
-                if (ui.displays.resLimitBeamTensile) ui.displays.resLimitBeamTensile.textContent = finalBeamTensile.toFixed(0); // Usa il limite termico
-                updateBadge(ui.displays.badgeBeam, beamStressMPa, finalBeamLimit, finalBeamTensile, ui.displays.resBeamStress);
+                // Mostra la tensione locale (critica) quando ci sono fori
+                ui.displays.resBeamStress.textContent = beamStressMPa_display.toFixed(1);
+                if (ui.displays.resLimitBeamYield) ui.displays.resLimitBeamYield.textContent = finalBeamLimit.toFixed(0);
+                if (ui.displays.resLimitBeamTensile) ui.displays.resLimitBeamTensile.textContent = finalBeamTensile.toFixed(0);
+                // Valuta il badge basandosi sulla tensione locale
+                updateBadge(ui.displays.badgeBeam, beamStressMPa_display, finalBeamLimit, finalBeamTensile, ui.displays.resBeamStress);
             }
 
             if (ui.displays.resInsertStress) {
-                ui.displays.resInsertStress.textContent = insertStressMPa.toFixed(1);
-                if (ui.displays.resLimitInsertYield) ui.displays.resLimitInsertYield.textContent = finalInsertLimit.toFixed(0); // Usa il limite termico
-                if (ui.displays.resLimitInsertTensile) ui.displays.resLimitInsertTensile.textContent = finalInsertTensile.toFixed(0); // Usa il limite termico
-                updateBadge(ui.displays.badgeInsert, insertStressMPa, finalInsertLimit, finalInsertTensile, ui.displays.resInsertStress);
+                ui.displays.resInsertStress.textContent = insertStressMPa_display.toFixed(1);
+                if (ui.displays.resLimitInsertYield) ui.displays.resLimitInsertYield.textContent = finalInsertLimit.toFixed(0);
+                if (ui.displays.resLimitInsertTensile) ui.displays.resLimitInsertTensile.textContent = finalInsertTensile.toFixed(0);
+                updateBadge(ui.displays.badgeInsert, insertStressMPa_display, finalInsertLimit, finalInsertTensile, ui.displays.resInsertStress);
             }
 
-            // Update local stress with Kt (advanced analysis)
-            if (ui.displays.valSigmaLocal && typeof HoleStressAnalysis !== 'undefined' && state.fastenerType !== 'none') {
-                try {
-                    const W_mm = state.width * 10;
-                    const holeAnalysis = new HoleStressAnalysis({
-                        d: state.fastenerDiameter,
-                        p: state.holeSpacing,
-                        t: state.thicknessH,
-                        W: W_mm,
-                        n: state.numBolts,
-                        material: state.beamMatKey
-                    });
-                    const sigmaLocal = holeAnalysis.getMaxLocalStress(beamStressMPa);
-                    ui.displays.valSigmaLocal.textContent = sigmaLocal.toFixed(1);
-                    
-                    // Color coding based on yield limit
-                    if (sigmaLocal > finalBeamLimit) {
-                        ui.displays.valSigmaLocal.className = "font-mono font-bold text-red-600";
-                    } else if (sigmaLocal > finalBeamLimit * 0.8) {
-                        ui.displays.valSigmaLocal.className = "font-mono font-bold text-yellow-600";
-                    } else {
-                        ui.displays.valSigmaLocal.className = "font-mono font-bold text-green-600";
-                    }
-                } catch(e) {
-                    ui.displays.valSigmaLocal.textContent = beamStressMPa.toFixed(1);
+            // --- AGGIORNAMENTO DISPLAY ANALISI AVANZATA FORI ---
+            // Kt effettivo
+            if (ui.displays.valKtEffective) {
+                ui.displays.valKtEffective.textContent = (Kt_beam || 1.0).toFixed(2);
+                if (Kt_beam > 2.5) {
+                    ui.displays.valKtEffective.className = "font-mono font-bold text-red-600";
+                } else if (Kt_beam > 2.0) {
+                    ui.displays.valKtEffective.className = "font-mono font-bold text-yellow-600";
+                } else {
+                    ui.displays.valKtEffective.className = "font-mono font-bold text-amber-900";
                 }
-            } else if (ui.displays.valSigmaLocal) {
-                ui.displays.valSigmaLocal.textContent = beamStressMPa.toFixed(1);
-                ui.displays.valSigmaLocal.className = "font-mono font-bold text-green-600";
+            }
+            
+            // Kf fatica
+            if (ui.displays.valKfFatigue) {
+                ui.displays.valKfFatigue.textContent = (Kf_beam || 1.0).toFixed(2);
+                if (Kf_beam > 2.0) {
+                    ui.displays.valKfFatigue.className = "font-mono font-bold text-red-600";
+                } else if (Kf_beam > 1.5) {
+                    ui.displays.valKfFatigue.className = "font-mono font-bold text-yellow-600";
+                } else {
+                    ui.displays.valKfFatigue.className = "font-mono font-bold text-amber-900";
+                }
+            }
+            
+            // Tensione locale (σ × Kt)
+            if (ui.displays.valSigmaLocal) {
+                const sigmaLocal = hasHoles ? beamStressMPa_display : beamStressMPa_nominal;
+                ui.displays.valSigmaLocal.textContent = sigmaLocal.toFixed(1);
+                if (sigmaLocal > finalBeamLimit) {
+                    ui.displays.valSigmaLocal.className = "font-mono font-bold text-red-600";
+                } else if (sigmaLocal > finalBeamLimit * 0.8) {
+                    ui.displays.valSigmaLocal.className = "font-mono font-bold text-yellow-600";
+                } else {
+                    ui.displays.valSigmaLocal.className = "font-mono font-bold text-green-600";
+                }
+            }
+            
+            // Bearing utilization
+            if (ui.displays.valBearingUtil) {
+                const util = bearingUtilization || 0;
+                ui.displays.valBearingUtil.textContent = util.toFixed(0);
+                if (util > 100) {
+                    ui.displays.valBearingUtil.className = "font-mono font-bold text-red-600";
+                } else if (util > 80) {
+                    ui.displays.valBearingUtil.className = "font-mono font-bold text-yellow-600";
+                } else {
+                    ui.displays.valBearingUtil.className = "font-mono font-bold text-amber-900";
+                }
+            }
+            
+            // Fattore sicurezza fatica
+            if (ui.displays.valFatigueSf) {
+                const sf = fatigueSafetyFactor || Infinity;
+                if (sf === Infinity || sf > 100) {
+                    ui.displays.valFatigueSf.textContent = "∞";
+                    ui.displays.valFatigueSf.className = "font-mono font-bold text-green-700";
+                } else {
+                    ui.displays.valFatigueSf.textContent = sf.toFixed(1);
+                    if (sf < 1.0) {
+                        ui.displays.valFatigueSf.className = "font-mono font-bold text-red-600";
+                    } else if (sf < 1.5) {
+                        ui.displays.valFatigueSf.className = "font-mono font-bold text-yellow-600";
+                    } else {
+                        ui.displays.valFatigueSf.className = "font-mono font-bold text-green-700";
+                    }
+                }
+            }
+            
+            // Riduzione area (valori reali calcolati)
+            if (ui.displays.valAreaReductionBeam && I_beam_val && A_beam_net) {
+                // Calcola riduzione area effettiva
+                const grossArea = I_beam_val > 0 ? (state.height * state.width / 100 * 100 - 
+                    (state.height - 2*state.thicknessH/10) * (state.width - 2*state.thicknessV/10) / 100 * 100) : 0;
+                const deltaA_beam_mm2 = hasHoles ? 
+                    (Math.PI * Math.pow(holeDiameter_mm / 2, 2) * numHoles) : 0;
+                ui.displays.valAreaReductionBeam.textContent = deltaA_beam_mm2.toFixed(2) + " mm²";
+            }
+            
+            if (ui.displays.valAreaReductionInsert) {
+                const deltaA_insert_mm2 = hasHoles ? 
+                    (Math.PI * Math.pow(holeDiameter_mm / 2, 2) * numHoles) : 0;
+                ui.displays.valAreaReductionInsert.textContent = deltaA_insert_mm2.toFixed(2) + " mm²";
             }
 
             // Deflessione (Y è positivo verso il basso nel canvas, mostriamo valore assoluto)
@@ -2182,7 +2313,5 @@
         update();
 
     </script>
-    <!-- MOTORE FEM v2.0 - Aggiunge funzionalità avanzate senza conflitti -->
-    <script src="fem_engine_v4.js"></script>
 </body>
 </html>
