@@ -3,812 +3,1926 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulatore FEM Gibus SpA - V4.0</title>
+    <title>Simulatore bracci Gibus SpA - V1.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'gibus-red': '#dc2626',
-                        'gibus-yellow': '#FFD100',
-                        'gibus-black': '#1a1a1a',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; }
-        .sidebar { width: 320px; min-width: 320px; }
-        .slider-label { font-size: 0.75rem; color: #666; }
-        .result-box { background: #f8f9fa; border-radius: 8px; padding: 12px; }
-        .stress-ok { background: #22c55e; }
-        .stress-warn { background: #eab308; }
-        .stress-critical { background: #f97316; }
-        .stress-fail { background: #dc2626; }
-        input[type="range"] { 
-            width: 100%; 
-            -webkit-appearance: none;
-            height: 6px;
-            border-radius: 3px;
-            background: #e5e7eb;
+        /* Stili per l'input range */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px;
+            border-radius: 50%; background: #1a1a1a; margin-top: -6px; 
+            cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.3); border: 2px solid #FFD100;
         }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #3b82f6;
-            cursor: pointer;
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: #e5e5e5; border-radius: 2px;
         }
-        select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
-        .control-group { margin-bottom: 12px; }
-        .control-group label { display: block; font-size: 0.8rem; font-weight: 500; margin-bottom: 4px; }
+        /* Stili Gibus */
+        text { font-family: ui-sans-serif, system-ui, sans-serif; user-select: none; }
+        .bg-gibus-yellow { background-color: #FFD100; }
+        .text-gibus-yellow { color: #FFD100; }
+        .border-gibus-yellow { border-color: #FFD100; }
+        .accent-gibus-black { accent-color: #1a1a1a; }
+        .disabled-group { opacity: 0.5; pointer-events: none; filter: grayscale(1); }
+        .fade-enter { transition: opacity 0.3s ease-in-out; }
     </style>
 </head>
-<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+<body class="flex flex-col h-screen bg-neutral-50 text-neutral-800 overflow-hidden">
+
     <!-- Header -->
-    <header class="bg-red-600 text-white px-6 py-3 flex items-center justify-between shadow-lg">
-        <div class="flex items-center gap-4">
-            <h1 class="text-xl font-bold">GIBUS SpA</h1>
-            <span class="text-sm opacity-80">Simulatore FEM Strutturale</span>
+    <header class="bg-red-600 text-white p-4 shadow-md flex items-center justify-between shrink-0 border-b-4 border-black z-30">
+        <div class="flex items-center gap-3">
+            <div class="bg-white px-2 py-1 rounded shadow-sm flex items-center">
+                <!-- Logo Gibus -->
+                <img src="gibus_logo_2020.png" alt="Gibus Logo" class="h-8 w-auto object-contain">
+            </div>
+            <h1 class="text-xl font-black tracking-tight uppercase">Simulatore bracci <span class="text-xs align-top opacity-75">v1.0</span></h1>
         </div>
-        <div class="flex items-center gap-4">
-            <span id="statusBadge" class="px-3 py-1 rounded-full text-sm font-semibold bg-green-500">OK</span>
-            <span class="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-bold">V4.0 ULTRA</span>
+        <div class="flex items-center gap-4 text-sm font-semibold">
+            <span class="hidden sm:inline opacity-80">FEM Solver</span>
+            <span class="bg-black text-gibus-yellow px-3 py-1 rounded text-xs uppercase tracking-wider">ZANOTTO Vanni</span>
         </div>
     </header>
 
-    <!-- Main Content -->
     <div class="flex flex-1 overflow-hidden">
-        <!-- Left Sidebar - Controls -->
-        <aside class="sidebar bg-white shadow-lg p-4 overflow-y-auto">
-            <h2 class="text-lg font-bold mb-4 text-gray-800"><i class="fas fa-sliders-h mr-2"></i>Controlli</h2>
+        
+        <!-- Sidebar LEFT -->
+        <aside class="w-80 bg-white border-r border-neutral-200 p-6 overflow-y-auto shadow-inner z-10 shrink-0 flex flex-col gap-5">
             
-            <!-- Materials Section -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-cube mr-1"></i>Materiali</h3>
-                <div class="control-group">
-                    <label>Lega Alluminio</label>
-                    <select id="input-material">
-                        <optgroup label="Leghe 6xxx (Estrusione)">
-                            <option value="6060-T4">6060 T4</option>
-                            <option value="6060-T6" selected>6060 T6</option>
-                            <option value="6061-T4">6061 T4</option>
-                            <option value="6061-T6">6061 T6</option>
-                            <option value="6063-T6">6063 T6</option>
-                            <option value="6082-T6">6082 T6</option>
-                            <option value="6082-CNC">6082 T6 (CNC)</option>
-                        </optgroup>
-                        <optgroup label="Leghe 7xxx (Alta Resistenza)">
-                            <option value="7075-T6">7075 T6 (Ergal)</option>
-                            <option value="7075-CNC">7075 T6 (CNC)</option>
-                        </optgroup>
-                        <optgroup label="Leghe 2xxx">
-                            <option value="2024-T3">2024 T3 (Avional)</option>
-                        </optgroup>
-                        <optgroup label="Leghe da Fonderia">
-                            <option value="46100-F">EN AB 46100</option>
-                            <option value="46000-F">EN AB 46000</option>
-                            <option value="47100-F">EN AB 47100</option>
-                            <option value="42100-T6">EN AB 42100 T6</option>
-                            <option value="ZA-27">Zamak 27</option>
-                        </optgroup>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Temperatura: <span id="temp-value" class="font-mono font-bold">20</span> °C</label>
-                    <input type="range" id="input-temperature" min="20" max="500" value="20">
-                </div>
-                <div id="material-info" class="p-2 bg-white rounded border border-gray-200 text-[10px] mt-2">
-                    <div class="grid grid-cols-2 gap-1">
-                        <span>E (GPa):</span><span id="mat-E" class="font-mono text-right">--</span>
-                        <span>σy (MPa):</span><span id="mat-yield" class="font-mono text-right">--</span>
-                        <span>k_E (T):</span><span id="mat-kE" class="font-mono text-right">--</span>
-                        <span>k_yield (T):</span><span id="mat-kY" class="font-mono text-right">--</span>
-                    </div>
-                </div>
+            <!-- SELEZIONE TIPO CARICO -->
+            <div class="bg-neutral-100 p-1 rounded-lg flex text-xs font-bold text-center mb-2 border border-neutral-200">
+                <button id="btn-mode-mass" class="flex-1 py-2 rounded shadow-sm bg-white text-black border border-neutral-100 transition-all hover:bg-gibus-yellow">
+                    CARICO (Fp)
+                </button>
+                <button id="btn-mode-pulley" class="flex-1 py-2 rounded text-neutral-500 hover:text-black transition-all hover:bg-neutral-200">
+                    TENSIONE (Fc)
+                </button>
             </div>
 
-            <!-- Geometry Section -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-ruler-combined mr-1"></i>Geometria Sezione</h3>
-                <div class="control-group">
-                    <label>Larghezza: <span id="width-value" class="font-mono font-bold">100</span> mm</label>
-                    <input type="range" id="input-width" min="20" max="500" value="100">
+            <!-- Pannello Massa -->
+            <div id="controls-mass" class="space-y-3">
+                <div class="flex justify-between">
+                    <label class="text-sm font-bold text-neutral-700">Massa Applicata</label>
+                    <span id="val-mass" class="text-xs font-bold text-black bg-gibus-yellow px-2 py-0.5 rounded">50 kg</span>
                 </div>
-                <div class="control-group">
-                    <label>Altezza: <span id="height-value" class="font-mono font-bold">50</span> mm</label>
-                    <input type="range" id="input-height" min="10" max="300" value="50">
-                </div>
-                <div class="control-group">
-                    <label>Spessore Verticale: <span id="tv-value" class="font-mono font-bold">3.0</span> mm</label>
-                    <input type="range" id="input-tv" min="1" max="20" step="0.5" value="3">
-                </div>
-                <div class="control-group">
-                    <label>Spessore Orizzontale: <span id="th-value" class="font-mono font-bold">3.0</span> mm</label>
-                    <input type="range" id="input-th" min="1" max="20" step="0.5" value="3">
-                </div>
-            </div>
-
-            <!-- Shoulder/Fastening Section -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-bolt mr-1"></i>Configurazione Spalla</h3>
-                <div class="control-group">
-                    <label>Viti Fissaggio: <span id="bolts-value" class="font-mono font-bold">4</span></label>
-                    <input type="range" id="input-bolts" min="1" max="10" value="4">
-                </div>
+                <input type="range" id="input-mass" min="1" max="300" value="50" class="w-full accent-gibus-black">
                 
-                <!-- Tipo Fissaggio -->
-                <div class="control-group pt-2 border-t border-gray-200 mt-2">
-                    <label class="text-xs font-bold text-gray-500 uppercase">Tipo Fissaggio</label>
-                    <select id="input-fastener-type" class="text-sm">
-                        <optgroup label="Viti Metriche">
-                            <option value="M4">M4 (Ø4.5mm)</option>
-                            <option value="M5">M5 (Ø5.5mm)</option>
-                            <option value="M6" selected>M6 (Ø6.5mm)</option>
-                            <option value="M8">M8 (Ø8.5mm)</option>
-                            <option value="M10">M10 (Ø11mm)</option>
-                        </optgroup>
-                        <optgroup label="Rivetti">
-                            <option value="R4">Rivetto Ø4</option>
-                            <option value="R5">Rivetto Ø5</option>
-                            <option value="R6">Rivetto Ø6</option>
-                        </optgroup>
-                        <optgroup label="Inserti Filettati">
-                            <option value="I-M4">Inserto M4</option>
-                            <option value="I-M5">Inserto M5</option>
-                            <option value="I-M6">Inserto M6</option>
-                        </optgroup>
-                    </select>
-                </div>
-
-                <!-- Classe Resistenza Bulloni -->
-                <div id="bolt-grade-container" class="control-group">
-                    <label class="text-xs font-bold text-gray-500 uppercase">Classe Resistenza</label>
-                    <select id="input-bolt-grade" class="text-sm">
-                        <option value="4.8">4.8 (Standard)</option>
-                        <option value="8.8" selected>8.8 (Alta Resist.)</option>
-                        <option value="10.9">10.9 (Molto Alta)</option>
-                        <option value="12.9">12.9 (Massima)</option>
-                    </select>
-                </div>
-
-                <!-- Posizione Fori -->
-                <div class="control-group">
-                    <label class="text-xs font-bold text-gray-500 uppercase">Posizione Fori</label>
-                    <select id="input-hole-position" class="text-sm">
-                        <option value="vertical" selected>Pareti Verticali</option>
-                        <option value="horizontal">Parete Sup./Inf.</option>
-                        <option value="both">Entrambe</option>
-                    </select>
-                </div>
-
-                <!-- Verifica Connessione -->
-                <div id="connection-info" class="mt-2 p-2 bg-white rounded border border-gray-200 text-[10px]">
-                    <div class="font-bold text-gray-600 mb-1">Verifica Connessione</div>
+                <div class="pt-2 border-t border-dashed border-neutral-300">
                     <div class="flex justify-between">
-                        <span>Resistenza:</span>
-                        <span id="res-connection-resistance" class="font-mono font-bold">-- kN</span>
+                        <label class="text-[10px] font-bold text-orange-600 uppercase">Massa a Riposo</label>
+                        <span id="val-mass-residual" class="text-[10px] font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded">0 kg</span>
                     </div>
-                    <div class="flex justify-between">
-                        <span>Utilizzo:</span>
-                        <span id="res-connection-utilization" class="font-mono">--%</span>
-                    </div>
-                    <div id="badge-connection-status" class="mt-1 text-center px-2 py-1 rounded text-[9px] font-bold bg-green-100 text-green-700">OK</div>
+                    <input type="range" id="input-mass-residual" min="0" max="50" value="0" class="w-full h-1 bg-orange-100 rounded appearance-none cursor-pointer accent-orange-600">
                 </div>
             </div>
 
-            <!-- Load Section -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-red-600 mb-2"><i class="fas fa-weight-hanging mr-1"></i>Carico Applicato</h3>
-                <div class="control-group">
-                    <label>Forza: <span id="force-value" class="font-mono font-bold">5000</span> N</label>
-                    <input type="range" id="input-force" min="0" max="100000" step="100" value="5000">
+            <!-- Pannello Carrucola -->
+            <div id="controls-pulley" class="space-y-4 hidden">
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="text-sm font-bold text-neutral-700">Tensione Cavo (Fc)</label>
+                        <span id="val-force-pulley" class="text-xs font-bold text-white bg-black px-2 py-0.5 rounded">500 N</span>
+                    </div>
+                    <input type="range" id="input-force-pulley" min="10" max="3000" step="10" value="500" class="w-full accent-gibus-black">
+                </div>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <label class="text-sm font-bold text-neutral-700">Quota Y Rinvio</label>
+                        <span id="val-pulley-y" class="text-xs font-bold text-white bg-black px-2 py-0.5 rounded">1.0 m</span>
+                    </div>
+                    <input type="range" id="input-pulley-y" min="0.1" max="3.0" step="0.1" value="1.0" class="w-full accent-gibus-black">
                 </div>
             </div>
 
-            <!-- Calculate Button -->
-            <button id="btn-calculate" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors">
-                <i class="fas fa-calculator mr-2"></i>Calcola Analisi FEM
-            </button>
+            <hr class="border-neutral-200">
+
+            <!-- CONDIZIONI AMBIENTALI -->
+            <div class="flex items-center gap-2 font-bold text-lg text-black border-b-2 border-blue-400 pb-1 w-max">
+                Ambiente
+            </div>
+            <div class="space-y-2 bg-blue-50 p-2 rounded border border-blue-100">
+                <div class="flex justify-between items-center">
+                    <label class="text-xs font-bold text-blue-900 uppercase">Temperatura</label>
+                    <span id="val-temperature" class="text-xs font-bold text-white bg-blue-500 px-2 py-0.5 rounded">20 °C</span>
+                </div>
+                <input type="range" id="input-temperature" min="-30" max="80" step="1" value="20" class="w-full h-1 bg-blue-200 rounded appearance-none cursor-pointer accent-blue-600">
+                <div class="text-[9px] text-blue-700 leading-tight">
+                    Influisce su Snervamento (Y) e Rottura (R).
+                </div>
+            </div>
+
+            <hr class="border-neutral-200">
+
+            <!-- MATERIALI -->
+            <div class="flex items-center gap-2 font-bold text-lg text-black border-b-2 border-gibus-yellow pb-1 w-max">
+                Materiali
+            </div>
+
+            <!-- Materiale Trave -->
+            <div class="space-y-1">
+                <label class="text-xs font-bold text-neutral-500 uppercase">Profilo Braccio</label>
+                <select id="input-material-beam" class="w-full p-2 border rounded text-xs bg-white border-neutral-300 text-black font-medium outline-none focus:ring-2 focus:ring-gibus-yellow">
+                    <optgroup label="Standard Gibus (Serie 6000)">
+                        <option value="6060-T6">Al 6060 T6</option>
+                        <option value="6061-T6" selected>Al 6061 T6 (Strutturale)</option>
+                        <option value="6063-T6">Al 6063 T6</option>
+                        <option value="6082-T6">Al 6082 T6</option>
+                    </optgroup>
+                    <optgroup label="Alte Prestazioni">
+                        <option value="2024-T3">Al 2024 T3</option>
+                        <option value="7075-T6">Al 7075 T6 (Ergal)</option>
+                    </optgroup>
+                </select>
+                <div class="flex justify-between px-1 text-[10px] text-neutral-400">
+                    <span>Snerv: <b id="display-Yield-Beam">240</b> MPa</span>
+                    <span>Rott: <b id="display-Tensile-Beam">290</b> MPa</span>
+                </div>
+            </div>
+
+            <!-- Materiale Inserto -->
+            <div class="space-y-1 mt-2">
+                <label class="text-xs font-bold text-neutral-500 uppercase">Spalla/Calcagno</label>
+                <select id="input-material-insert" class="w-full p-2 border rounded text-xs bg-white border-neutral-300 text-black font-medium outline-none focus:ring-2 focus:ring-gibus-yellow">
+                    <optgroup label="Pressofusione">
+                        <option value="46100-F" selected>EN AB-46100</option>
+                        <option value="46000-F">EN AB-46000</option>
+                        <option value="47100-F">EN AB-47100</option>
+                        <option value="ZA-27">Zamak 27</option>
+                    </optgroup>
+                    <optgroup label="Conchiglia/CNC">
+                        <option value="42100-T6">EN AB-42100 T6</option>
+                        <option value="6082-CNC">Al 6082 T6 (CNC)</option>
+                        <option value="7075-CNC">Al 7075 T6 (CNC)</option>
+                    </optgroup>
+                </select>
+                <div class="flex justify-between px-1 text-[10px] text-neutral-400">
+                    <span>Snerv: <b id="display-Yield-Insert">140</b> MPa</span>
+                    <span>Rott: <b id="display-Tensile-Insert">240</b> MPa</span>
+                </div>
+            </div>
+
+            <!-- Porosità -->
+            <div class="space-y-1 mt-2 bg-neutral-100 p-2 rounded border border-neutral-200">
+                <div class="flex justify-between text-[10px] uppercase font-bold text-neutral-500">
+                    <label>Porosità (Difetto)</label>
+                    <span id="val-porosity" class="text-red-600 font-bold">0%</span>
+                </div>
+                <input type="range" id="input-porosity" min="0" max="15" step="1" value="0" class="w-full h-1 bg-neutral-300 rounded-lg appearance-none cursor-pointer accent-red-600">
+            </div>
+
+            <hr class="border-neutral-200">
+
+            <!-- 4. GEOMETRIA PROFILO -->
+            <div class="flex items-center gap-2 font-bold text-lg text-black border-b-2 border-gibus-yellow pb-1 w-max">
+                Geometria Profilo
+            </div>
+            
+            <!-- Selezione Forma -->
+            <div class="space-y-1 mt-2">
+                <label class="text-xs font-bold text-indigo-700 uppercase">Design Profilo</label>
+                <select id="input-beam-shape" class="w-full p-2 border rounded text-xs bg-indigo-50 border-indigo-200 text-indigo-900 font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="rect" selected>Rettangolare (Standard)</option>
+                    <option value="aero">Gibus Aero (Bombata)</option>
+                    <option value="oval">Ovale</option>
+                    <option value="power">Power-Box (Smussato)</option>
+                </select>
+            </div>
+
+            <!-- Cava LED -->
+            <div class="flex items-center justify-between bg-yellow-50 p-2 rounded border border-yellow-100 mt-2 mb-2">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold text-yellow-700 uppercase">Cava LED (Top)</span>
+                    <span class="text-[9px] text-yellow-600">Alloggio P (12x8mm)</span>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="input-led-groove" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-500"></div>
+                </label>
+            </div>
+
+            <!-- SVG Uploader Trave -->
+            <div class="bg-neutral-100 p-2 rounded border border-neutral-300 mb-2 mt-2">
+                <div class="flex justify-between items-center mb-1">
+                    <label class="text-[10px] font-bold text-neutral-500 uppercase">Profilo Custom (SVG)</label>
+                    <button id="btn-clear-svg-beam" class="hidden text-[9px] text-red-500 underline">Rimuovi</button>
+                </div>
+                <input type="file" id="input-svg-beam" accept=".svg" class="text-[10px] w-full text-neutral-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[9px] file:font-bold file:bg-gibus-yellow file:text-black hover:file:bg-yellow-400 cursor-pointer"/>
+                <div id="custom-beam-info" class="text-[9px] text-neutral-500 mt-1 hidden bg-white p-1 rounded border border-neutral-200">
+                    <div><b>Nome:</b> <span id="svg-beam-name">...</span></div>
+                    <div><b>Ix:</b> <span id="svg-beam-inertia" class="font-mono text-blue-600"></span> cm⁴</div>
+                    <div id="beam-layer-info" class="text-green-600 font-bold mt-1"></div>
+                </div>
+            </div>
+            
+            <div id="manual-geometry-controls" class="space-y-3 transition-opacity duration-300">
+                <div class="space-y-1">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-medium text-neutral-600">Altezza (H)</label>
+                        <span id="val-height" class="text-xs font-bold text-neutral-800">6.2 cm</span>
+                    </div>
+                    <input type="range" id="input-height" min="4" max="25" step="0.1" value="6.2" class="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-gibus-black">
+                </div>
+                <div class="space-y-1">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-medium text-neutral-600">Larghezza (W)</label>
+                        <span id="val-width" class="text-xs font-bold text-neutral-800">3.3 cm</span>
+                    </div>
+                    <input type="range" id="input-width" min="2" max="25" step="0.1" value="3.3" class="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-gibus-black">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="space-y-1">
+                        <div class="flex justify-between">
+                            <label class="text-[9px] font-bold text-neutral-500">Spessore V.</label>
+                            <div class="text-[9px] text-right font-mono" id="val-thickness-v">3 mm</div>
+                        </div>
+                        <input type="range" id="input-thickness-v" min="1" max="10" step="0.5" value="3" class="w-full h-1 bg-neutral-200 rounded accent-gibus-black">
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between">
+                            <label class="text-[9px] font-bold text-neutral-500">Spessore O.</label>
+                            <div class="text-[9px] text-right font-mono" id="val-thickness-h">3 mm</div>
+                        </div>
+                        <input type="range" id="input-thickness-h" min="1" max="10" step="0.5" value="3" class="w-full h-1 bg-neutral-200 rounded accent-gibus-black">
+                    </div>
+                </div>
+                <div class="space-y-1 border-t border-neutral-200 pt-2 mt-2">
+                    <div class="flex justify-between">
+                        <label class="text-[9px] font-bold text-neutral-500">Raggio Raccordi</label>
+                        <span id="val-fillet" class="text-[9px] font-bold text-neutral-800">4.0 mm</span>
+                    </div>
+                    <input type="range" id="input-fillet" min="0.5" max="5" step="0.5" value="4.0" class="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-gibus-black">
+                </div>
+            </div>
+
+            <hr class="border-neutral-200">
+
+            <!-- 5. GEOMETRIA INSERTO -->
+            <div class="bg-neutral-100 p-3 rounded-lg border border-neutral-300 space-y-3">
+                <div class="text-[10px] font-black text-neutral-500 uppercase tracking-widest border-b border-neutral-300 pb-1 mb-2">
+                    Configurazione Spalla
+                </div>
+
+                <div class="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200 mb-2">
+                    <div class="flex flex-col">
+                        <span class="text-xs font-bold text-green-800 uppercase">Auto-Adatta</span>
+                        <span class="text-[9px] text-green-600">Accoppiamento garantito</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="input-auto-fit" class="sr-only peer" checked>
+                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                    </label>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-neutral-700 uppercase">Sezione Spalla</label>
+                    <select id="input-insert-shape" class="w-full p-2 border rounded text-xs bg-white border-neutral-300 text-neutral-800 font-medium outline-none focus:ring-2 focus:ring-neutral-500">
+                        <option value="solid" selected>Piena (Default)</option>
+                        <option value="ibeam">Doppia T (I-Beam)</option>
+                        <option value="hollow">Scatolare</option>
+                        <option value="xrib">Rinforzata a X</option>
+                        <option value="c_channel">Canale Raccordato (C/R)</option>
+                    </select>
+                </div>
+
+                <!-- Pannelli Avanzati Inserto -->
+                <div id="advanced-insert-controls" class="hidden bg-white p-2 rounded border border-neutral-300 mt-1 space-y-2 shadow-sm transition-all">
+                    <div class="text-[9px] font-bold text-neutral-400 uppercase border-b border-neutral-100 pb-1">Parametri Sezione Interna</div>
+                    
+                    <div id="fields-ibeam" class="hidden space-y-2">
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-neutral-600">Spessore Ali (Tf)</label>
+                                <span id="val-insert-flange" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">8 mm</span>
+                            </div>
+                            <input type="range" id="input-insert-flange" min="2" max="20" step="0.5" value="8" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-neutral-600">Spessore Anima (Tw)</label>
+                                <span id="val-insert-web" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">6 mm</span>
+                            </div>
+                            <input type="range" id="input-insert-web" min="2" max="20" step="0.5" value="6" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                        </div>
+                    </div>
+
+                    <div id="fields-xrib" class="hidden space-y-2">
+                         <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-neutral-600">Spessore Parete</label>
+                                <span id="val-insert-wall" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">5 mm</span>
+                            </div>
+                            <input type="range" id="input-insert-wall" min="2" max="15" step="0.5" value="5" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                        </div>
+                         <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-neutral-600">Spessore X-Rib</label>
+                                <span id="val-insert-rib" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">4 mm</span>
+                            </div>
+                            <input type="range" id="input-insert-rib" min="1" max="10" step="0.5" value="4" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                        </div>
+                    </div>
+
+                    <div id="fields-c-channel" class="hidden space-y-2">
+                        <div class="grid grid-cols-2 gap-2">
+                             <div class="space-y-1">
+                                <div class="flex justify-between">
+                                    <label class="text-[9px] font-bold text-neutral-600">T. Sup.</label>
+                                    <span id="val-insert-flange-c" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">8 mm</span>
+                                </div>
+                                <input type="range" id="input-insert-flange-c" min="2" max="20" step="0.5" value="8" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                            </div>
+                             <div class="space-y-1">
+                                <div class="flex justify-between">
+                                    <label class="text-[9px] font-bold text-neutral-600">T. Inf.</label>
+                                    <span id="val-insert-web-c" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">6 mm</span>
+                                </div>
+                                <input type="range" id="input-insert-web-c" min="2" max="20" step="0.5" value="6" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <div class="flex justify-between">
+                                    <label class="text-[9px] font-bold text-neutral-600">T. Vert.</label>
+                                    <span id="val-insert-wall-c" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">5 mm</span>
+                                </div>
+                                <input type="range" id="input-insert-wall-c" min="2" max="15" step="0.5" value="5" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                            </div>
+                            <div class="space-y-1">
+                                <div class="flex justify-between">
+                                    <label class="text-[9px] font-bold text-neutral-600">Raggio</label>
+                                    <span id="val-insert-radius-internal" class="text-[9px] font-bold text-black bg-neutral-200 px-1 rounded">4 mm</span>
+                                </div>
+                                <input type="range" id="input-insert-radius-internal" min="0" max="10" step="0.5" value="4" class="w-full h-1 bg-neutral-200 rounded accent-black">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SVG Uploader Inserto -->
+                <div class="bg-white p-2 rounded border border-neutral-200 mb-2 mt-2">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[9px] font-bold text-neutral-500 uppercase">Spalla Custom (SVG)</label>
+                        <button id="btn-clear-svg-insert" class="hidden text-[9px] text-red-500 underline">Rimuovi</button>
+                    </div>
+                    <input type="file" id="input-svg-insert" accept=".svg" class="text-[10px] w-full text-neutral-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[9px] file:font-bold file:bg-neutral-200 file:text-black hover:file:bg-neutral-300 cursor-pointer"/>
+                    <div id="custom-insert-info" class="text-[9px] text-neutral-500 mt-1 hidden">
+                        <div><b>Nome:</b> <span id="svg-insert-name">...</span></div>
+                        <div><b>Ix:</b> <span id="svg-insert-inertia" class="font-mono text-purple-600"></span> cm⁴</div>
+                        <div id="insert-layer-info" class="text-green-600 font-bold mt-1"></div>
+                    </div>
+                </div>
+
+                <div id="manual-insert-controls" class="space-y-3 transition-opacity">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] text-neutral-400">Altezza (Hi)</label>
+                            <input type="range" id="input-insert-height" min="1" max="25" step="0.1" value="9.4" class="w-full h-1 bg-neutral-300 rounded-lg accent-neutral-600">
+                            <div id="val-insert-height" class="text-[9px] text-right font-mono">9.4cm</div>
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-neutral-400">Larghezza (Wi)</label>
+                            <input type="range" id="input-insert-width" min="1" max="25" step="0.1" value="4.4" class="w-full h-1 bg-neutral-300 rounded-lg accent-neutral-600">
+                            <div id="val-insert-width" class="text-[9px] text-right font-mono">4.4cm</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Distanza Muro -->
+                <div class="space-y-1">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-medium text-neutral-600">Distanza Muro</label>
+                        <span id="val-dist-wall" class="text-xs font-bold text-neutral-800">10 cm</span>
+                    </div>
+                    <input type="range" id="input-dist-wall" min="2" max="50" step="1" value="10" class="w-full h-1 bg-neutral-300 rounded-lg appearance-none cursor-pointer accent-neutral-600">
+                </div>
+
+                <!-- Penetrazione -->
+                <div class="space-y-1">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-medium text-neutral-600">Penetrazione (Lp)</label>
+                        <span id="val-penetration" class="text-xs font-bold text-neutral-800">30 cm</span>
+                    </div>
+                    <input type="range" id="input-penetration" min="5" max="100" step="1" value="30" class="w-full h-1 bg-neutral-300 rounded-lg appearance-none cursor-pointer accent-neutral-600">
+                </div>
+
+                <!-- Viti -->
+                <div class="space-y-1 pt-2 border-t border-neutral-200">
+                    <div class="flex justify-between">
+                        <label class="text-xs font-medium text-neutral-600">Viti Fissaggio</label>
+                        <span id="val-bolts" class="text-xs font-bold text-white bg-black px-2 py-0.5 rounded-full">3</span>
+                    </div>
+                    <input type="range" id="input-bolts" min="1" max="10" step="1" value="3" class="w-full h-1 bg-neutral-300 rounded-lg appearance-none cursor-pointer accent-black">
+                </div>
+            </div>
+
+            <hr class="border-neutral-200">
+
+            <!-- GLOBALI -->
+            <div class="space-y-3">
+                <div class="flex justify-between">
+                    <label class="text-sm font-medium text-neutral-600">Lunghezza Totale <span class="text-red-600 font-bold">[X]</span></label>
+                    <span id="val-length" class="text-xs font-bold text-black bg-gibus-yellow px-2 rounded">2.0 m</span>
+                </div>
+                <input type="range" id="input-length" min="1.5" max="5" step="0.1" value="2" class="w-full accent-gibus-black">
+            </div>
+
+            <div class="space-y-2 mt-4 bg-black p-2 rounded border border-neutral-800">
+                <div class="flex justify-between items-center">
+                    <label class="text-[10px] text-gibus-yellow font-bold uppercase">Zoom Deformazione</label>
+                    <span id="val-scale" class="text-[10px] text-white">1x</span>
+                </div>
+                <input type="range" id="input-scale" min="1" max="100" value="1" class="w-full accent-gibus-yellow">
+            </div>
+
         </aside>
 
-        <!-- Main Canvas Area -->
-        <main class="flex-1 flex flex-col bg-gray-200 overflow-hidden">
-            <!-- SVG Canvas -->
-            <div class="flex-1 p-4 overflow-hidden">
-                <div class="bg-white rounded-lg shadow-lg h-full p-4 overflow-hidden">
-                    <svg id="fem-canvas" class="w-full h-full" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">
+        <!-- Main Center -->
+        <main class="flex-1 flex flex-col relative bg-neutral-50">
+            <div class="flex-1 relative w-full overflow-hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-lg shadow-lg border border-neutral-200 w-full h-full relative">
+                    <svg id="fem-canvas" class="w-full h-full" preserveAspectRatio="xMidYMid meet" viewBox="-50 -50 900 650">
                         <defs>
-                            <linearGradient id="stressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" style="stop-color:#22c55e"/>
-                                <stop offset="50%" style="stop-color:#eab308"/>
-                                <stop offset="100%" style="stop-color:#dc2626"/>
-                            </linearGradient>
-                            <pattern id="wallPattern" patternUnits="userSpaceOnUse" width="10" height="10">
-                                <line x1="0" y1="10" x2="10" y2="0" stroke="#666" stroke-width="1"/>
-                            </pattern>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b" /></marker>
+                            <marker id="arrowhead-red" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626" /></marker>
+                            <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a" /></marker>
+                            <marker id="arrowhead-blue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb" /></marker>
+                            <marker id="arrowhead-orange" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c" /></marker>
+                            <marker id="arrowhead-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea" /></marker>
+                            <marker id="arrow-sm" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#525252"/></marker>
+                            <marker id="arrow-sm-rev" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto"><polygon points="6 0, 0 3, 6 6" fill="#525252"/></marker>
                         </defs>
-                        <g id="sectionGroup">
-                            <!-- Section visualization will be drawn here -->
-                        </g>
-                        <text x="500" y="250" text-anchor="middle" fill="#999" font-size="16">
-                            Premi "Calcola Analisi FEM" per visualizzare la sezione
-                        </text>
+                        <g id="grid-layer" stroke="#f1f5f9" stroke-width="1"></g>
+                        <line id="ghost-beam" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="5,5" />
+                        <g id="support-layer"></g>
+                        <g id="residual-layer"></g> 
+                        <g id="insert-exposed-layer"></g> <g id="insert-layer"></g> <g id="beam-layer"></g>
+                        <g id="bolts-layer"></g> <g id="mass-layer"></g>
+                        <g id="pulley-layer"></g> <g id="annotations-layer"></g>
+                        <g id="axis-layer"></g> 
                     </svg>
+                    <div class="absolute top-4 right-4 bg-white/95 p-3 rounded-lg shadow-md border border-neutral-200 text-xs z-10">
+                        <div class="font-bold mb-2 text-black">Legenda</div>
+                        <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 bg-neutral-600 rounded"></div> <span class="text-neutral-500">Spalla/Calcagno</span></div>
+                        <div class="flex items-center gap-2 mb-2"><div class="w-3 h-3 bg-red-500 rounded"></div> <span class="text-neutral-500">Profilo Estruso</span></div>
+                        <div class="flex items-center gap-2 mb-2"><div class="w-8 h-0 border-t-2 border-dashed border-orange-600"></div> <span class="text-orange-600 font-bold">Residuo</span></div>
+                        <div class="h-16 w-3 bg-gradient-to-b from-[rgb(255,50,0)] to-[rgb(0,50,255)] rounded mx-auto mt-2"></div>
+                        <div class="text-[10px] text-center text-neutral-400 mt-1">Stress</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Results Panel -->
-            <div class="bg-white shadow-lg p-4 border-t">
-                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    <div class="result-box text-center">
-                        <div class="text-xs text-gray-500 mb-1">Area (mm²)</div>
-                        <div class="text-xl font-bold text-gray-800 font-mono" id="res-area">--</div>
+            <!-- Pannello Risultati -->
+            <div class="h-auto bg-white border-t border-b-8 border-black border-t-neutral-200 p-4 shadow-lg z-20 shrink-0">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 items-stretch text-sm">
+                    <div class="border-l-4 border-red-500 pl-3 flex flex-col justify-center">
+                        <div class="text-[10px] text-neutral-400 font-bold uppercase mb-1">Profilo Braccio</div>
+                        <div class="flex items-baseline gap-2"><span id="res-beam-stress" class="text-xl font-bold font-mono text-black">0</span><span class="text-xs text-neutral-500">MPa</span></div>
+                        <div class="text-[10px] mt-1 flex flex-col gap-0.5 border-t border-neutral-100 pt-1">
+                            <div class="flex justify-between items-center"><span class="text-neutral-400">Snervamento: <span id="res-limit-beam-yield" class="font-mono font-bold text-red-600">0</span> MPa</span><span id="badge-beam-status" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700">OK</span></div>
+                            <div class="flex justify-between items-center"><span class="text-neutral-400">Rottura: <span id="res-limit-beam-tensile" class="font-mono font-bold text-red-600">0</span> MPa</span></div>
+                        </div>
                     </div>
-                    <div class="result-box text-center">
-                        <div class="text-xs text-gray-500 mb-1">Area Netta (mm²)</div>
-                        <div class="text-xl font-bold text-gray-800 font-mono" id="res-area-net">--</div>
+                    <div class="border-l-4 border-neutral-600 pl-3 flex flex-col justify-center">
+                        <div class="text-[10px] text-neutral-400 font-bold uppercase mb-1">Spalla/Calcagno</div>
+                        <div class="flex items-baseline gap-2"><span id="res-insert-stress" class="text-xl font-bold font-mono text-black">0</span><span class="text-xs text-neutral-500">MPa</span></div>
+                        <div class="text-[10px] mt-1 flex flex-col gap-0.5 border-t border-neutral-100 pt-1">
+                            <div class="flex justify-between items-center"><span class="text-neutral-400">Snervamento: <span id="res-limit-insert-yield" class="font-mono font-bold text-black">0</span> MPa</span><span id="badge-insert-status" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700">OK</span></div>
+                             <div class="flex justify-between items-center"><span class="text-neutral-400">Rottura: <span id="res-limit-insert-tensile" class="font-mono font-bold text-black">0</span> MPa</span></div>
+                        </div>
                     </div>
-                    <div class="result-box text-center">
-                        <div class="text-xs text-gray-500 mb-1">Inerzia (mm⁴)</div>
-                        <div class="text-xl font-bold text-purple-600 font-mono" id="res-inertia">--</div>
+                    <div class="border-l-4 border-gibus-yellow pl-3 flex flex-col justify-center bg-yellow-50/20">
+                        <div class="text-[10px] text-neutral-400 font-bold uppercase mb-1">Dati Geometrici</div>
+                        <div class="flex justify-between items-center"><span class="text-xs text-neutral-500">Freccia Y (Carico):</span><span class="font-mono font-bold text-black"><span id="res-deflection">0</span> mm</span></div>
+                         <div class="flex justify-between items-center mt-1"><span class="text-xs text-orange-600 font-bold">Freccia Y (Residua):</span><span id="res-deflection-residual" class="font-mono font-bold text-orange-600">0 mm</span></div>
                     </div>
-                    <div class="result-box text-center">
-                        <div class="text-xs text-gray-500 mb-1">Inerzia Netta (mm⁴)</div>
-                        <div class="text-xl font-bold text-purple-600 font-mono" id="res-inertia-net">--</div>
-                    </div>
-                    <div class="result-box text-center">
-                        <div class="text-xs text-gray-500 mb-1">Resist. Totale (kN)</div>
-                        <div class="text-xl font-bold text-green-600 font-mono" id="res-total">--</div>
-                    </div>
-                    <div class="result-box text-center">
-                        <div class="text-xs text-gray-500 mb-1">Utilizzo</div>
-                        <div class="text-xl font-bold text-blue-600 font-mono" id="res-utilization">--%</div>
-                    </div>
-                </div>
-                <!-- Utilization Bar -->
-                <div class="mt-4">
-                    <div id="utilization-bar" class="h-4 bg-gray-200 rounded-full overflow-hidden">
-                        <div id="utilization-fill" class="h-full bg-green-500 transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                    <div class="flex justify-between text-[10px] text-gray-400 mt-1">
-                        <span>0%</span>
-                        <span>50%</span>
-                        <span>100%</span>
+                    <div class="border-l-4 border-neutral-800 pl-3 flex flex-col justify-center">
+                         <div class="text-[10px] text-neutral-400 font-bold uppercase mb-1">Proprietà Sezione</div>
+                         <div class="grid grid-cols-1 gap-1 mt-1">
+                             <div class="flex justify-between text-xs"><span class="text-neutral-500">I Braccio:</span><span class="font-mono font-bold"><span id="res-I-beam">0</span> cm⁴</span></div>
+                             <div class="flex justify-between text-xs"><span class="text-neutral-500">Peso Braccio:</span><span class="font-mono font-bold text-blue-700"><span id="res-weight-beam">0.00</span> kg/m</span></div>
+                             <div class="flex justify-between text-xs border-t border-neutral-200 pt-1 mt-1"><span class="text-neutral-500">I Calcagno:</span><span class="font-mono font-bold"><span id="res-I-insert">0</span> cm⁴</span></div>
+                         </div>
                     </div>
                 </div>
             </div>
         </main>
 
-        <!-- Right Sidebar - Section Analysis -->
-        <aside class="sidebar bg-white shadow-lg p-4 overflow-y-auto">
-            <h2 class="text-lg font-bold mb-4 text-gray-800"><i class="fas fa-eye mr-2"></i>Analisi Sezione</h2>
-            
-            <!-- Section Preview -->
-            <div class="bg-gray-100 rounded-lg p-2 mb-4">
-                <svg id="section-preview" class="w-full" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
-                    <g id="sectionPreviewGroup">
-                        <!-- Section cross-section preview -->
-                    </g>
-                </svg>
+        <!-- Sidebar RIGHT -->
+        <aside class="w-80 bg-white border-l border-neutral-200 p-6 shadow-inner z-10 shrink-0 flex flex-col gap-5 overflow-y-auto">
+            <div class="flex items-center gap-2 font-bold text-lg text-black border-b-2 border-gibus-yellow pb-1 w-max">
+                Analisi Sezione
             </div>
-            
-            <!-- Additional Section Results -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-gray-700 mb-2">Riduzione per Fori</h3>
-                <div class="text-xs space-y-1">
-                    <div class="flex justify-between"><span>Riduzione I:</span><span id="res-inertia-reduction" class="font-mono font-bold text-orange-600">--%</span></div>
-                    <div class="flex justify-between"><span>Fattore Kt (Peterson):</span><span id="res-kt" class="font-mono font-bold text-orange-600">--</span></div>
-                    <div class="flex justify-between"><span>Modulo Sezione (mm³):</span><span id="res-section-modulus" class="font-mono">--</span></div>
-                    <div class="flex justify-between"><span>Tipo Lega:</span><span id="res-alloy-type" class="font-mono text-blue-600">--</span></div>
+            <p class="text-xs text-neutral-500">Sezione trasversale (Piano YZ).</p>
+            <div class="mt-2 pt-2 relative flex flex-col h-full">
+                <div class="flex justify-center gap-2 mb-2">
+                    <button id="btn-preview-beam" class="text-[10px] font-bold uppercase px-4 py-2 rounded bg-black text-gibus-yellow shadow-md">Profilo</button>
+                    <button id="btn-preview-insert" class="text-[10px] font-bold uppercase px-4 py-2 rounded bg-neutral-200 text-neutral-600 shadow-sm">Spalla</button>
                 </div>
-            </div>
-
-            <!-- Thermal Factors (EN 1999-1-2) -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-gray-700 mb-2">Fattori Termici (EN 1999-1-2)</h3>
-                <div class="text-xs space-y-1">
-                    <div class="flex justify-between"><span>k_E (Modulo):</span><span id="res-kE" class="font-mono">--</span></div>
-                    <div class="flex justify-between"><span>k_yield (Snerv.):</span><span id="res-kY" class="font-mono">--</span></div>
-                    <div class="flex justify-between"><span>E Effettivo (GPa):</span><span id="res-E-eff" class="font-mono">--</span></div>
-                    <div class="flex justify-between"><span>σy Effettivo (MPa):</span><span id="res-yield-eff" class="font-mono">--</span></div>
+                <div class="flex-1 min-h-[300px] border border-neutral-200 rounded-lg shadow-sm bg-white relative overflow-hidden">
+                     <svg id="section-preview" class="w-full h-full" preserveAspectRatio="xMidYMid meet" viewBox="0 0 300 300"></svg>
+                     <div class="absolute bottom-2 right-2 text-[9px] text-neutral-400 font-mono bg-white/80 px-1 rounded">Scala Automatica</div>
+                     <div id="collision-alert" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-600 text-white font-black text-sm px-4 py-2 rounded shadow-xl border-2 border-white animate-pulse z-20">⚠️ INTERFERENZA</div>
                 </div>
-            </div>
-
-            <!-- Connection Check (EN 1993-1-8) -->
-            <div class="bg-gray-50 rounded-lg p-3 mb-4">
-                <h3 class="font-semibold text-sm text-gray-700 mb-2">Verifica Connessione (EN 1993-1-8)</h3>
-                <div class="text-xs space-y-1">
-                    <div class="flex justify-between"><span>Resist. Taglio (kN):</span><span id="res-shear" class="font-mono">--</span></div>
-                    <div class="flex justify-between"><span>Resist. Rifollam. (kN):</span><span id="res-bearing" class="font-mono">--</span></div>
-                    <div class="flex justify-between"><span>Modo Rottura:</span><span id="res-failure-mode" class="font-mono">--</span></div>
+                <div id="svg-overlay-msg" class="hidden absolute inset-0 top-12 flex items-center justify-center pointer-events-none">
+                    <span class="bg-white/90 text-xs font-bold text-gibus-yellow px-3 py-1 rounded shadow-lg border border-black/10">PROFILO CUSTOM</span>
                 </div>
-            </div>
-
-            <!-- Stress Scale -->
-            <div class="bg-gray-50 rounded-lg p-3">
-                <h3 class="font-semibold text-sm text-gray-700 mb-2">Scala Utilizzo</h3>
-                <div class="h-4 rounded" style="background: linear-gradient(to right, #22c55e, #eab308, #dc2626)"></div>
-                <div class="flex justify-between text-xs mt-1">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
+                <div class="mt-4 bg-neutral-50 p-3 rounded border border-neutral-200 text-[10px] space-y-1">
+                    <div class="font-bold text-neutral-600 mb-1 border-b border-neutral-200 pb-1">LEGENDA ASSI</div>
+                    <div class="flex items-center gap-2"><div class="w-8 h-0.5 bg-blue-600 border-dashed border-t border-blue-600"></div> <span>Asse Z (Larghezza)</span></div>
+                    <div class="flex items-center gap-2"><div class="w-8 h-0.5 bg-green-600 border-dashed border-t border-green-600"></div> <span>Asse Y (Altezza)</span></div>
                 </div>
             </div>
         </aside>
+
     </div>
 
-    <!-- Log Panel (collapsible) -->
-    <div class="bg-gray-900 text-green-400 px-4 py-2 text-xs font-mono border-t border-gray-700">
-        <div class="flex items-center justify-between mb-1">
-            <span class="text-gray-500">Log Analisi</span>
-            <button id="toggle-log" class="text-gray-500 hover:text-white text-xs">▼</button>
-        </div>
-        <div id="analysis-log" class="h-24 overflow-y-auto">
-            <div>FEM Engine v4.0 ULTRA - Ready</div>
-            <div class="text-gray-500">Attesa input...</div>
-        </div>
-    </div>
-
-    <script src="fem_engine_v4.js"></script>
     <script>
-        // ==================== APPLICATION STATE ====================
-        const state = {
-            material: '6060-T6',
-            temperature: 20,
-            width: 100,
-            height: 50,
-            t_v: 3,
-            t_h: 3,
-            bolts: 4,
-            fastenerType: 'M6',
-            boltGrade: '8.8',
-            holePosition: 'vertical',
-            force: 5000
+        const MATERIALS = {
+            '6060-T4': { E: 68.0, yield: 65, tensile: 130, name: "6060 T4" },
+            '6060-T6': { E: 69.0, yield: 150, tensile: 190, name: "6060 T6" },
+            '6061-T4': { E: 68.3, yield: 110, tensile: 205, name: "6061 T4" },
+            '6061-T6': { E: 70.0, yield: 240, tensile: 290, name: "6061 T6" },
+            '6063-T6': { E: 69.5, yield: 170, tensile: 215, name: "6063 T6" },
+            '6082-T6': { E: 70.5, yield: 260, tensile: 310, name: "6082 T6" },
+            '7075-T6': { E: 71.7, yield: 505, tensile: 570, name: "7075 T6 (Ergal)" },
+            '2024-T3': { E: 73.1, yield: 345, tensile: 480, name: "2024 T3 (Avional)" },
+            '46100-F': { E: 71.0, yield: 140, tensile: 240, name: "EN AB 46100" }, 
+            '46000-F': { E: 72.0, yield: 140, tensile: 240, name: "EN AB 46000" },
+            '47100-F': { E: 75.0, yield: 150, tensile: 260, name: "EN AB 47100" },
+            'ZA-27':   { E: 78.0, yield: 370, tensile: 400, name: "Zamak 27" },
+            '42100-T6': { E: 71.0, yield: 210, tensile: 290, name: "EN AB 42100 T6" },
+            '6082-CNC': { E: 70.0, yield: 260, tensile: 310, name: "6082 T6 (CNC)" },
+            '7075-CNC': { E: 71.7, yield: 500, tensile: 570, name: "7075 T6 (CNC)" },
         };
 
-        // ==================== UI ELEMENTS ====================
+        const state = {
+            mode: 'mass', mass: 50, massResidual: 0, pulleyForce: 500, pulleyY: 1.0,
+            length: 2, penetration: 30, distWall: 10, height: 6.2, width: 3.3, thicknessV: 3, thicknessH: 3,
+            insertHeight: 9.4, insertWidth: 4.4, insertFlangeT: 8, insertWebT: 6, insertWallT: 5, insertRibT: 4, insertRadiusInternal: 4,
+            numBolts: 3, beamMatKey: '6061-T6', insertMatKey: '46100-F', porosity: 0, scaleFactor: 1,
+            customProfile: null, customInsertProfile: null, previewMode: 'beam', beamShape: 'rect', insertShape: 'solid',
+            autoFit: true, filletRadius: 4.0, ledGroove: false, temperature: 20
+        };
+
+        const CONSTANTS = { g: 9.81, startX: 50, groundY: 300, svgWidth: 900, svgHeight: 600, pixelsPerMeter: 180, densityAluminum: 2700 };
+
         const ui = {
             inputs: {
-                material: document.getElementById('input-material'),
-                temperature: document.getElementById('input-temperature'),
-                width: document.getElementById('input-width'),
-                height: document.getElementById('input-height'),
-                tv: document.getElementById('input-tv'),
-                th: document.getElementById('input-th'),
-                bolts: document.getElementById('input-bolts'),
-                fastenerType: document.getElementById('input-fastener-type'),
-                boltGrade: document.getElementById('input-bolt-grade'),
-                holePosition: document.getElementById('input-hole-position'),
-                force: document.getElementById('input-force'),
+                mass: document.getElementById('input-mass'), massResidual: document.getElementById('input-mass-residual'),
+                pulleyForce: document.getElementById('input-force-pulley'), pulleyY: document.getElementById('input-pulley-y'),
+                length: document.getElementById('input-length'), penetration: document.getElementById('input-penetration'), distWall: document.getElementById('input-dist-wall'),
+                height: document.getElementById('input-height'), width: document.getElementById('input-width'), thicknessV: document.getElementById('input-thickness-v'), thicknessH: document.getElementById('input-thickness-h'),
+                bolts: document.getElementById('input-bolts'), insertHeight: document.getElementById('input-insert-height'), insertWidth: document.getElementById('input-insert-width'),
+                matBeam: document.getElementById('input-material-beam'), matInsert: document.getElementById('input-material-insert'), porosity: document.getElementById('input-porosity'), scale: document.getElementById('input-scale'),
+                fileSvg: document.getElementById('input-svg-beam'), fileSvgInsert: document.getElementById('input-svg-insert'),
+                beamShape: document.getElementById('input-beam-shape'), insertShape: document.getElementById('input-insert-shape'), autoFit: document.getElementById('input-auto-fit'),
+                fillet: document.getElementById('input-fillet'), ledGroove: document.getElementById('input-led-groove'),
+                insertFlange: document.getElementById('input-insert-flange'), insertWeb: document.getElementById('input-insert-web'), insertWall: document.getElementById('input-insert-wall'), insertRib: document.getElementById('input-insert-rib'),
+                insertFlangeC: document.getElementById('input-insert-flange-c'), insertWebC: document.getElementById('input-insert-web-c'), insertWallC: document.getElementById('input-insert-wall-c'), insertRadiusInternal: document.getElementById('input-insert-radius-internal'),
+                temperature: document.getElementById('input-temperature')
             },
-            values: {
-                temp: document.getElementById('temp-value'),
-                width: document.getElementById('width-value'),
-                height: document.getElementById('height-value'),
-                tv: document.getElementById('tv-value'),
-                th: document.getElementById('th-value'),
-                bolts: document.getElementById('bolts-value'),
-                force: document.getElementById('force-value'),
+            controls: {
+                btnMass: document.getElementById('btn-mode-mass'), btnPulley: document.getElementById('btn-mode-pulley'),
+                panelMass: document.getElementById('controls-mass'), panelPulley: document.getElementById('controls-pulley'),
+                manualGeom: document.getElementById('manual-geometry-controls'), profileInfo: document.getElementById('custom-beam-info'), btnClearSvg: document.getElementById('btn-clear-svg-beam'),
+                manualInsert: document.getElementById('manual-insert-controls'), insertProfileInfo: document.getElementById('custom-insert-info'), btnClearSvgInsert: document.getElementById('btn-clear-svg-insert'),
+                btnPreviewBeam: document.getElementById('btn-preview-beam'), btnPreviewInsert: document.getElementById('btn-preview-insert'),
+                advInsertControls: document.getElementById('advanced-insert-controls'), fieldsIbeam: document.getElementById('fields-ibeam'), fieldsXrib: document.getElementById('fields-xrib'), fieldsCChannel: document.getElementById('fields-c-channel')
             },
-            boltGradeContainer: document.getElementById('bolt-grade-container'),
-            btnCalculate: document.getElementById('btn-calculate'),
-            log: document.getElementById('analysis-log'),
-            statusBadge: document.getElementById('statusBadge')
+            displays: {
+                mass: document.getElementById('val-mass'), massResidual: document.getElementById('val-mass-residual'),
+                pulleyForce: document.getElementById('val-force-pulley'), pulleyY: document.getElementById('val-pulley-y'),
+                length: document.getElementById('val-length'), penetration: document.getElementById('val-penetration'), distWall: document.getElementById('val-dist-wall'),
+                valHeight: document.getElementById('val-height'), valWidth: document.getElementById('val-width'), valThicknessV: document.getElementById('val-thickness-v'), valThicknessH: document.getElementById('val-thickness-h'), valFillet: document.getElementById('val-fillet'),
+                bolts: document.getElementById('val-bolts'), valInsertHeight: document.getElementById('val-insert-height'), valInsertWidth: document.getElementById('val-insert-width'),
+                porosity: document.getElementById('val-porosity'), scale: document.getElementById('val-scale'), fillet: document.getElementById('val-fillet'),
+                dispYieldBeam: document.getElementById('display-Yield-Beam'), dispYieldInsert: document.getElementById('display-Yield-Insert'),
+                dispTensileBeam: document.getElementById('display-Tensile-Beam'), dispTensileInsert: document.getElementById('display-Tensile-Insert'),
+                resBeamStress: document.getElementById('res-beam-stress'), resLimitBeamYield: document.getElementById('res-limit-beam-yield'), resLimitBeamTensile: document.getElementById('res-limit-beam-tensile'),
+                nameBeamSmall: document.getElementById('name-beam-small'), badgeBeam: document.getElementById('badge-beam-status'),
+                resInsertStress: document.getElementById('res-insert-stress'), resLimitInsertYield: document.getElementById('res-limit-insert-yield'), resLimitInsertTensile: document.getElementById('res-limit-insert-tensile'),
+                nameInsertSmall: document.getElementById('name-insert-small'), badgeInsert: document.getElementById('badge-insert-status'),
+                resDeflection: document.getElementById('res-deflection'), resDeflectionResidual: document.getElementById('res-deflection-residual'),
+                resIBeam: document.getElementById('res-I-beam'), resIInsert: document.getElementById('res-I-insert'), resWeightBeam: document.getElementById('res-weight-beam'),
+                svgName: document.getElementById('svg-beam-name'), svgInertia: document.getElementById('svg-beam-inertia'), svgOverlay: document.getElementById('svg-overlay-msg'), collisionAlert: document.getElementById('collision-alert'),
+                svgInsertName: document.getElementById('svg-insert-name'), svgInsertInertia: document.getElementById('svg-insert-inertia'),
+                beamLayerInfo: document.getElementById('beam-layer-info'), insertLayerInfo: document.getElementById('insert-layer-info'),
+                valInsertFlange: document.getElementById('val-insert-flange'), valInsertWeb: document.getElementById('val-insert-web'), valInsertWall: document.getElementById('val-insert-wall'), valInsertRib: document.getElementById('val-insert-rib'),
+                valInsertFlangeC: document.getElementById('val-insert-flange-c'), valInsertWebC: document.getElementById('val-insert-web-c'), valInsertWallC: document.getElementById('val-insert-wall-c'), valInsertRadiusInternal: document.getElementById('val-insert-radius-internal'),
+                valTemperature: document.getElementById('val-temperature')
+            },
+            svgLayers: {
+                grid: document.getElementById('grid-layer'), support: document.getElementById('support-layer'), residual: document.getElementById('residual-layer'),
+                insertExposed: document.getElementById('insert-exposed-layer'), insert: document.getElementById('insert-layer'), beam: document.getElementById('beam-layer'),
+                bolts: document.getElementById('bolts-layer'), mass: document.getElementById('mass-layer'), pulley: document.getElementById('pulley-layer'),
+                annotations: document.getElementById('annotations-layer'), ghost: document.getElementById('ghost-beam'), axis: document.getElementById('axis-layer')
+            }
         };
 
-        // ==================== LOGGING ====================
-        function log(message, type = 'info') {
-            const div = document.createElement('div');
-            const timestamp = new Date().toLocaleTimeString();
-            div.className = type === 'error' ? 'text-red-400' : 
-                           type === 'success' ? 'text-green-400' : 
-                           type === 'warning' ? 'text-yellow-400' : 'text-gray-300';
-            div.textContent = `[${timestamp}] ${message}`;
-            ui.log.appendChild(div);
-            ui.log.scrollTop = ui.log.scrollHeight;
+        function createSVG(type, attrs) {
+            const el = document.createElementNS("http://www.w3.org/2000/svg", type);
+            for(let k in attrs) el.setAttribute(k, attrs[k]);
+            return el;
         }
 
-        // ==================== SAFE VALUE GETTERS ====================
-        /**
-         * Safely get a numeric value from an input element
-         * @param {HTMLInputElement} el - The input element
-         * @param {number} def - Default value if element is null or value is invalid
-         * @returns {number} The parsed float value or default
-         */
-        function safeNum(el, def) {
-            return el && !isNaN(parseFloat(el.value)) ? parseFloat(el.value) : def;
-        }
-        /**
-         * Safely get an integer value from an input element
-         * @param {HTMLInputElement} el - The input element
-         * @param {number} def - Default value if element is null or value is invalid
-         * @returns {number} The parsed integer value or default
-         */
-        function safeInt(el, def) {
-            return el && !isNaN(parseInt(el.value)) ? parseInt(el.value) : def;
-        }
-        /**
-         * Safely get a string value from a select/input element
-         * @param {HTMLElement} el - The input or select element
-         * @param {string} def - Default value if element is null or value is empty
-         * @returns {string} The element value or default
-         */
-        function safeStr(el, def) {
-            return el && el.value ? el.value : def;
-        }
-
-        // ==================== MATERIAL INFO UPDATE ====================
-        function updateMaterialInfo() {
-            const mat = MATERIALS_V4[state.material];
-            if (!mat) return;
-
-            const alloyType = ThermalReductionFactors.getAlloyType(mat.name);
-            const kE = ThermalReductionFactors.getE_factor(state.temperature);
-            const kY = ThermalReductionFactors.getYield_factor(state.temperature, alloyType);
-
-            document.getElementById('mat-E').textContent = mat.E.toFixed(1);
-            document.getElementById('mat-yield').textContent = mat.yield;
-            document.getElementById('mat-kE').textContent = kE.toFixed(3);
-            document.getElementById('mat-kY').textContent = kY.toFixed(3);
-        }
-
-        // ==================== BOLT GRADE VISIBILITY ====================
-        function updateBoltGradeVisibility() {
-            const fastener = FASTENERS_DB[state.fastenerType];
-            if (fastener && fastener.type === 'bolt') {
-                ui.boltGradeContainer.style.display = 'block';
+        function safeVal(el, fallback = 0) { return el ? parseFloat(el.value) : fallback; }
+        function safeInt(el, fallback = 1) { return el ? parseInt(el.value) : fallback; }
+        function safeStr(el, fallback = "") { return el ? el.value : fallback; }
+        
+        function setPreviewMode(mode) {
+            state.previewMode = mode;
+            if(mode === 'beam') {
+                if (ui.controls.btnPreviewBeam) ui.controls.btnPreviewBeam.className = "text-[10px] font-bold uppercase px-4 py-2 rounded bg-black text-gibus-yellow shadow-md transform scale-105";
+                if (ui.controls.btnPreviewInsert) ui.controls.btnPreviewInsert.className = "text-[10px] font-bold uppercase px-4 py-2 rounded bg-neutral-200 text-neutral-600 shadow-sm";
             } else {
-                ui.boltGradeContainer.style.display = 'none';
+                if (ui.controls.btnPreviewBeam) ui.controls.btnPreviewBeam.className = "text-[10px] font-bold uppercase px-4 py-2 rounded bg-neutral-200 text-neutral-600 shadow-sm";
+                if (ui.controls.btnPreviewInsert) ui.controls.btnPreviewInsert.className = "text-[10px] font-bold uppercase px-4 py-2 rounded bg-black text-gibus-yellow shadow-md transform scale-105";
             }
+            update();
         }
 
-        // ==================== STATUS BADGE UPDATE ====================
-        function updateStatusBadge(utilization) {
-            if (utilization < 50) {
-                ui.statusBadge.textContent = 'OK';
-                ui.statusBadge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-green-500 text-white';
-            } else if (utilization < 80) {
-                ui.statusBadge.textContent = 'ATTENZIONE';
-                ui.statusBadge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-yellow-500 text-black';
-            } else if (utilization <= 100) {
-                ui.statusBadge.textContent = 'CRITICO';
-                ui.statusBadge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-orange-500 text-white';
-            } else {
-                ui.statusBadge.textContent = 'ROTTURA';
-                ui.statusBadge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-red-600 text-white';
-            }
+        // SVG HANDLING FIXED
+        function handleFileUpload(e, type) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) { processSVG(event.target.result, file.name, type); };
+            reader.readAsText(file);
         }
 
-        // ==================== SECTION DRAWING ====================
-        function drawSection(section) {
-            const svg = document.getElementById('sectionGroup');
-            svg.innerHTML = '';
-            
-            const centerX = 500;
-            const centerY = 250;
-            const scale = 3;
-            
-            const W = state.width * scale;
-            const H = state.height * scale;
-            const tV = state.t_v * scale;
-            const tH = state.t_h * scale;
-            
-            // Outer rectangle
-            const outer = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            outer.setAttribute('x', centerX - W/2);
-            outer.setAttribute('y', centerY - H/2);
-            outer.setAttribute('width', W);
-            outer.setAttribute('height', H);
-            outer.setAttribute('fill', '#e5e7eb');
-            outer.setAttribute('stroke', '#374151');
-            outer.setAttribute('stroke-width', 2);
-            svg.appendChild(outer);
-            
-            // Inner void
-            const innerW = W - 2 * tV;
-            const innerH = H - 2 * tH;
-            if (innerW > 0 && innerH > 0) {
-                const inner = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                inner.setAttribute('x', centerX - innerW/2);
-                inner.setAttribute('y', centerY - innerH/2);
-                inner.setAttribute('width', innerW);
-                inner.setAttribute('height', innerH);
-                inner.setAttribute('fill', 'white');
-                inner.setAttribute('stroke', '#374151');
-                inner.setAttribute('stroke-width', 1);
-                svg.appendChild(inner);
-            }
-            
-            // Draw holes if configured
-            if (state.bolts > 0 && section.fastenerInfo) {
-                const d_hole_px = section.fastenerInfo.d_hole * 1000 * scale;
+        function processSVG(svgText, fileName, type) {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(svgText, "image/svg+xml");
                 
-                // Validate hole diameter before drawing
-                if (d_hole_px <= 0) return;
+                // Crea un contenitore nascosto ma renderizzato per calcolare le matrici CTM
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'absolute';
+                tempDiv.style.visibility = 'hidden';
+                tempDiv.style.pointerEvents = 'none';
                 
-                const holePositions = [];
+                // Importa il nodo radice per assicurarsi che i namespace siano corretti
+                const importedSVG = document.importNode(doc.documentElement, true);
+                tempDiv.appendChild(importedSVG);
+                document.body.appendChild(tempDiv);
                 
-                if (state.holePosition === 'vertical' || state.holePosition === 'both') {
-                    // Holes on left and right walls
-                    for (let i = 0; i < state.bolts; i++) {
-                        // For single bolt, center it; for multiple, distribute evenly
-                        const y = state.bolts === 1 
-                            ? centerY 
-                            : centerY - H/4 + (i * H/2 / (state.bolts - 1));
-                        holePositions.push({ x: centerX - W/2 + tV/2, y: y });
-                        holePositions.push({ x: centerX + W/2 - tV/2, y: y });
-                    }
-                }
-                if (state.holePosition === 'horizontal' || state.holePosition === 'both') {
-                    // Holes on top and bottom walls
-                    for (let i = 0; i < state.bolts; i++) {
-                        // For single bolt, center it; for multiple, distribute evenly
-                        const x = state.bolts === 1 
-                            ? centerX 
-                            : centerX - W/4 + (i * W/2 / (state.bolts - 1));
-                        holePositions.push({ x: x, y: centerY - H/2 + tH/2 });
-                        holePositions.push({ x: x, y: centerY + H/2 - tH/2 });
-                    }
+                const allPaths = tempDiv.querySelectorAll('path');
+                if (allPaths.length === 0) { 
+                    document.body.removeChild(tempDiv);
+                    alert("Nessun percorso trovato nel file SVG."); 
+                    return; 
                 }
                 
-                holePositions.forEach(pos => {
-                    const hole = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    hole.setAttribute('cx', pos.x);
-                    hole.setAttribute('cy', pos.y);
-                    hole.setAttribute('r', Math.max(1, d_hole_px / 2)); // Ensure minimum radius of 1px
-                    hole.setAttribute('fill', '#dc2626');
-                    hole.setAttribute('stroke', '#991b1b');
-                    hole.setAttribute('stroke-width', 1);
-                    svg.appendChild(hole);
+                const polygons = [];
+                const pathStrings = []; // Qui salveremo le nuove stringhe "Baked"
+                
+                // Estrazione Geometria con applicazione trasformazioni (Fix Relativo)
+                allPaths.forEach(path => {
+                    const len = path.getTotalLength();
+                    const points = [];
+                    // Aumentiamo risoluzione per una conversione polilinea fedele
+                    const numSteps = 400; 
+                    
+                    // Ottiene la matrice di trasformazione globale (include transforms dei gruppi genitori)
+                    const ctm = path.getCTM();
+
+                    let polyPathD = "";
+
+                    for (let i=0; i<=numSteps; i++) {
+                        let pt = path.getPointAtLength((i/numSteps)*len);
+                        
+                        // Applica la trasformazione al punto
+                        if (ctm) {
+                            pt = pt.matrixTransform(ctm);
+                        }
+
+                        points.push({x: pt.x, y: pt.y});
+                        
+                        // Ricostruisce il path come polilinea assoluta
+                        // M = Move to, L = Line to
+                        const cmd = i === 0 ? "M" : "L";
+                        polyPathD += `${cmd} ${pt.x.toFixed(3)} ${pt.y.toFixed(3)} `;
+                    }
+                    polyPathD += "Z"; // Chiude il loop
+
+                    polygons.push(points);
+                    pathStrings.push(polyPathD);
                 });
+                
+                document.body.removeChild(tempDiv);
+
+                // Calcolo Proprietà per ogni tracciato (ora su punti trasformati)
+                let shapes = polygons.map((poly, index) => {
+                    let A = 0; let Sy = 0; let Sx = 0; let Ix_raw = 0; let Iy_raw = 0;
+                    // Teorema di Green
+                    for (let i = 0; i < poly.length - 1; i++) {
+                        const p1 = poly[i]; const p2 = poly[i+1];
+                        const term = (p1.x * p2.y - p2.x * p1.y);
+                        A += term;
+                        Sy += (p1.y + p2.y) * term;
+                        Sx += (p1.x + p2.x) * term;
+                        Ix_raw += (p1.y*p1.y + p1.y*p2.y + p2.y*p2.y) * term;
+                        Iy_raw += (p1.x*p1.x + p1.x*p2.x + p2.x*p2.x) * term;
+                    }
+                    A *= 0.5; Sy *= (1/6); Sx *= (1/6); Ix_raw *= (1/12); Iy_raw *= (1/12);
+                    return { A: Math.abs(A), signedA: A, Sy, Sx, Ix_raw, Iy_raw, d: pathStrings[index], points: poly };
+                });
+
+                // Ordinamento per Area Decrescente
+                shapes.sort((a,b) => b.A - a.A);
+
+                // Logica di selezione dei tracciati
+                let selectedShapes = [];
+                let logicInfo = "";
+
+                if (shapes.length >= 3) {
+                    if (type === 'beam') {
+                        // Profilo: Area tra Esterno (0) e Medio (1)
+                        selectedShapes = [shapes[0], shapes[1]];
+                        logicInfo = "3 Layer: Profilo (Est - Med)";
+                    } else {
+                        // Spalla: Area tra Medio (1) e Interno (2)
+                        selectedShapes = [shapes[1], shapes[2]];
+                        logicInfo = "3 Layer: Spalla (Med - Int)";
+                    }
+                } else if (shapes.length === 2) {
+                    // Standard: Esterno (0) - Interno (1)
+                    selectedShapes = [shapes[0], shapes[1]];
+                    logicInfo = "2 Layer: Standard";
+                } else {
+                    selectedShapes = [shapes[0]];
+                    logicInfo = "1 Layer: Pieno";
+                }
+
+                // Calcolo Combinato (Forma Positiva - Forma Negativa)
+                const s1 = selectedShapes[0];
+                const s2 = selectedShapes[1]; 
+
+                let combinedArea, combinedMy, combinedMx, combinedIxOrig, combinedIyOrig;
+
+                // Proprietà base Shape 1 (Guscio Esterno)
+                const A1 = s1.A;
+                const Cx1 = s1.Sx / s1.signedA;
+                const Cy1 = s1.Sy / s1.signedA;
+                // Ix_raw è rispetto all'origine globale. Assicuriamo sia positivo.
+                const I_x_orig_1 = Math.abs(s1.Ix_raw); 
+                const I_y_orig_1 = Math.abs(s1.Iy_raw);
+
+                if (s2) {
+                    const A2 = s2.A;
+                    const Cx2 = s2.Sx / s2.signedA;
+                    const Cy2 = s2.Sy / s2.signedA;
+                    const I_x_orig_2 = Math.abs(s2.Ix_raw);
+                    const I_y_orig_2 = Math.abs(s2.Iy_raw);
+
+                    combinedArea = A1 - A2;
+                    combinedMx = (A1 * Cy1) - (A2 * Cy2); 
+                    combinedMy = (A1 * Cx1) - (A2 * Cx2); 
+                    combinedIxOrig = I_x_orig_1 - I_x_orig_2;
+                    combinedIyOrig = I_y_orig_1 - I_y_orig_2;
+                } else {
+                    combinedArea = A1;
+                    combinedMx = A1 * Cy1;
+                    combinedMy = A1 * Cx1;
+                    combinedIxOrig = I_x_orig_1;
+                    combinedIyOrig = I_y_orig_1;
+                }
+
+                if (combinedArea <= 0.0001) throw new Error("Area nulla o non valida");
+
+                const globalCx = combinedMy / combinedArea;
+                const globalCy = combinedMx / combinedArea;
+
+                // Teorema Huygens-Steiner (Assi Paralleli)
+                // Trasliamo dal riferimento globale al baricentro della sezione composta
+                const I_x_centroid = combinedIxOrig - combinedArea * globalCy * globalCy;
+                // const I_y_centroid = combinedIyOrig - combinedArea * globalCx * globalCx;
+
+                // Calcolo bounding box (basato sui punti trasformati)
+                let bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+                selectedShapes.forEach(s => {
+                    s.points.forEach(p => {
+                        if(p.x < bounds.minX) bounds.minX = p.x;
+                        if(p.x > bounds.maxX) bounds.maxX = p.x;
+                        if(p.y < bounds.minY) bounds.minY = p.y;
+                        if(p.y > bounds.maxY) bounds.maxY = p.y;
+                    });
+                });
+
+                const I_cm4 = I_x_centroid / 10000;
+                
+                // Creiamo pathData combinato con le nuove stringhe "Baked"
+                const combinedPathData = selectedShapes.map(s => s.d).join(' ');
+
+                const profileData = { 
+                    name: fileName, 
+                    I_mm4: I_x_centroid, 
+                    area_mm2: combinedArea,
+                    height_mm: bounds.maxY - bounds.minY, 
+                    width_mm: bounds.maxX - bounds.minX, 
+                    pathData: combinedPathData,
+                    bounds: bounds
+                };
+
+                if (type === 'beam') {
+                    state.customProfile = profileData;
+                    if (ui.displays.svgName) ui.displays.svgName.textContent = fileName.length > 15 ? fileName.substring(0,12)+"..." : fileName;
+                    if (ui.displays.svgInertia) ui.displays.svgInertia.textContent = I_cm4.toFixed(2);
+                    if (ui.displays.beamLayerInfo) ui.displays.beamLayerInfo.textContent = logicInfo;
+                    if (ui.controls.manualGeom) ui.controls.manualGeom.classList.add('disabled-group');
+                    if (ui.controls.profileInfo) ui.controls.profileInfo.classList.remove('hidden');
+                    if (ui.controls.btnClearSvg) ui.controls.btnClearSvg.classList.remove('hidden');
+                    setPreviewMode('beam');
+                } else {
+                    state.customInsertProfile = profileData;
+                    if (ui.displays.svgInsertName) ui.displays.svgInsertName.textContent = fileName.length > 15 ? fileName.substring(0,12)+"..." : fileName;
+                    if (ui.displays.svgInsertInertia) ui.displays.svgInsertInertia.textContent = I_cm4.toFixed(2);
+                    if (ui.displays.insertLayerInfo) ui.displays.insertLayerInfo.textContent = logicInfo;
+                    if (ui.controls.manualInsert) ui.controls.manualInsert.classList.add('disabled-group');
+                    if (ui.controls.insertProfileInfo) ui.controls.insertProfileInfo.classList.remove('hidden');
+                    if (ui.controls.btnClearSvgInsert) ui.controls.btnClearSvgInsert.classList.remove('hidden');
+                    setPreviewMode('insert');
+                }
+                update();
+            } catch (err) {
+                console.error("Errore SVG:", err);
+                alert("Errore calcolo SVG: " + err.message);
             }
-            
-            // Dimension labels
-            const labelW = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            labelW.setAttribute('x', centerX);
-            labelW.setAttribute('y', centerY + H/2 + 25);
-            labelW.setAttribute('text-anchor', 'middle');
-            labelW.setAttribute('fill', '#666');
-            labelW.setAttribute('font-size', '12');
-            labelW.textContent = `${state.width} mm`;
-            svg.appendChild(labelW);
-            
-            const labelH = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            labelH.setAttribute('x', centerX + W/2 + 15);
-            labelH.setAttribute('y', centerY);
-            labelH.setAttribute('text-anchor', 'start');
-            labelH.setAttribute('fill', '#666');
-            labelH.setAttribute('font-size', '12');
-            labelH.textContent = `${state.height} mm`;
-            svg.appendChild(labelH);
         }
 
-        // ==================== SECTION PREVIEW ====================
-        function drawSectionPreview(section) {
-            const svg = document.getElementById('sectionPreviewGroup');
-            svg.innerHTML = '';
+        function clearProfile(type) {
+            if (type === 'beam') {
+                state.customProfile = null;
+                if (ui.inputs.fileSvg) ui.inputs.fileSvg.value = "";
+                if (ui.controls.manualGeom) ui.controls.manualGeom.classList.remove('disabled-group');
+                if (ui.controls.profileInfo) ui.controls.profileInfo.classList.add('hidden');
+                if (ui.controls.btnClearSvg) ui.controls.btnClearSvg.classList.add('hidden');
+                setPreviewMode('beam');
+            } else {
+                state.customInsertProfile = null;
+                if (ui.inputs.fileSvgInsert) ui.inputs.fileSvgInsert.value = "";
+                if (ui.controls.manualInsert) ui.controls.manualInsert.classList.remove('disabled-group');
+                if (ui.controls.insertProfileInfo) ui.controls.insertProfileInfo.classList.add('hidden');
+                if (ui.controls.btnClearSvgInsert) ui.controls.btnClearSvgInsert.classList.add('hidden');
+                setPreviewMode('insert');
+            }
+            update();
+        }
+
+        function drawCustomProfile(profile, container) {
+            if (!profile.bounds) return;
+            const w = profile.bounds.maxX - profile.bounds.minX;
+            const h = profile.bounds.maxY - profile.bounds.minY;
+            const cx = (profile.bounds.minX + profile.bounds.maxX) / 2;
+            const cy = (profile.bounds.minY + profile.bounds.maxY) / 2;
             
-            const centerX = 100;
-            const centerY = 100;
-            const scale = 1.5;
+            const scale = Math.min(240/w, 240/h); 
+            const tx = 150 - cx * scale;
+            const ty = 150 - cy * scale;
+
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            g.setAttribute("transform", `translate(${tx}, ${ty}) scale(${scale})`);
             
-            const W = state.width * scale;
-            const H = state.height * scale;
-            const tV = state.t_v * scale;
-            const tH = state.t_h * scale;
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", profile.pathData);
+            path.setAttribute("fill", "#e0e7ff");
+            path.setAttribute("stroke", "#4f46e5");
+            path.setAttribute("stroke-width", 2/scale);
+            // Critical: evenodd rule handles the hole correctly regardless of path direction
+            path.setAttribute("fill-rule", "evenodd"); 
             
-            // Outer
-            const outer = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            outer.setAttribute('x', centerX - W/2);
-            outer.setAttribute('y', centerY - H/2);
-            outer.setAttribute('width', W);
-            outer.setAttribute('height', H);
-            outer.setAttribute('fill', '#e5e7eb');
-            outer.setAttribute('stroke', '#374151');
-            outer.setAttribute('stroke-width', 2);
-            outer.setAttribute('rx', 2);
-            svg.appendChild(outer);
+            g.appendChild(path);
+            container.appendChild(g);
+        }
+
+        function updateSectionPreview() {
+            const svg = document.getElementById('section-preview');
+            if (!svg) return;
+            svg.innerHTML = ''; 
             
-            // Inner
-            const innerW = W - 2 * tV;
-            const innerH = H - 2 * tH;
-            if (innerW > 0 && innerH > 0) {
-                const inner = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                inner.setAttribute('x', centerX - innerW/2);
-                inner.setAttribute('y', centerY - innerH/2);
-                inner.setAttribute('width', innerW);
-                inner.setAttribute('height', innerH);
-                inner.setAttribute('fill', 'white');
-                inner.setAttribute('stroke', '#374151');
-                inner.setAttribute('stroke-width', 1);
-                svg.appendChild(inner);
+            const isCustomBeam = !!state.customProfile;
+            const isCustomInsert = !!state.customInsertProfile;
+            
+            const overlay = ui.displays.svgOverlay;
+            if (state.previewMode === 'beam' && isCustomBeam) {
+                 drawCustomProfile(state.customProfile, svg);
+                 overlay.classList.remove('hidden');
+                 return; 
+            } else if (state.previewMode === 'insert' && isCustomInsert) {
+                 drawCustomProfile(state.customInsertProfile, svg);
+                 overlay.classList.remove('hidden');
+                 return;
+            } else {
+                 overlay.classList.add('hidden');
+            }
+
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            defs.innerHTML = `
+                <marker id="arrow-sm" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#525252"/></marker>
+                <marker id="arrow-sm-rev" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto"><polygon points="6 0, 0 3, 6 6" fill="#525252"/></marker>
+            `;
+            svg.appendChild(defs);
+
+            const wContainer = 300;
+            const hContainer = 300;
+            const cx = wContainer / 2;
+            const cy = hContainer / 2;
+
+            const H = state.height;
+            const W = state.width;
+            const Hi = state.insertHeight;
+            const Wi = state.insertWidth;
+
+            const maxDim = Math.max(H, W, Hi, Wi) * 1.5; 
+            const scale = Math.min(wContainer, hContainer) / maxDim * 0.8; 
+
+            const W_px = W * scale;
+            const H_px = H * scale;
+            const Wi_px = Wi * scale;
+            const Hi_px = Hi * scale;
+
+            let Sv_px = (state.thicknessV / 10) * scale;
+            let Sh_px = (state.thicknessH / 10) * scale;
+            
+            const filletR = (state.filletRadius / 10) * scale;
+            const grooveW_px = (0.4) * scale; 
+            const grooveD_px = (0.8) * scale; 
+            const grooveDia_px = (0.7) * scale; 
+            const grooveTotalD_px = grooveD_px + grooveDia_px/2;
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            
+            const opacityBeam = state.previewMode === 'beam' ? 1.0 : 0.15;
+            const opacityInsert = state.previewMode === 'insert' ? 1.0 : 0.15;
+
+            // --- BEAM DRAWING ---
+            let outerPath = "";
+            if (state.beamShape === 'oval') {
+                outerPath = `M ${cx - W_px/2} ${cy} A ${W_px/2} ${H_px/2} 0 1 1 ${cx + W_px/2} ${cy} A ${W_px/2} ${H_px/2} 0 1 1 ${cx - W_px/2} ${cy} Z`;
+            } else if (state.beamShape === 'power') {
+                const chamfer = Math.min(W_px, H_px) * 0.2;
+                outerPath = `M ${cx - W_px/2 + chamfer} ${cy - H_px/2} L ${cx + W_px/2 - chamfer} ${cy - H_px/2} L ${cx + W_px/2} ${cy - H_px/2 + chamfer} L ${cx + W_px/2} ${cy + H_px/2 - chamfer} L ${cx + W_px/2 - chamfer} ${cy + H_px/2} L ${cx - W_px/2 + chamfer} ${cy + H_px/2} L ${cx - W_px/2} ${cy + H_px/2 - chamfer} L ${cx - W_px/2} ${cy - H_px/2 + chamfer} Z`;
+            } else if (state.beamShape === 'aero') {
+                const bow = W_px * 0.15; 
+                outerPath = `M ${cx - W_px/2} ${cy - H_px/2} L ${cx + W_px/2} ${cy - H_px/2} Q ${cx + W_px/2 + bow} ${cy} ${cx + W_px/2} ${cy + H_px/2} L ${cx - W_px/2} ${cy + H_px/2} Q ${cx - W_px/2 - bow} ${cy} ${cx - W_px/2} ${cy - H_px/2} Z`;
+            } else {
+                outerPath = `M ${cx - W_px/2} ${cy - H_px/2} L ${cx + W_px/2} ${cy - H_px/2} L ${cx + W_px/2} ${cy + H_px/2} L ${cx - W_px/2} ${cy + H_px/2} Z`;
+            }
+            
+            const beamShape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            beamShape.setAttribute("d", outerPath);
+            beamShape.setAttribute("fill", "#fee2e2"); 
+            beamShape.setAttribute("stroke", "#ef4444"); 
+            beamShape.setAttribute("stroke-width", "2");
+            beamShape.setAttribute("opacity", opacityBeam);
+            g.appendChild(beamShape);
+
+            const innerW = Math.max(0, W_px - 2*Sh_px);
+            const innerH = Math.max(0, H_px - 2*Sv_px);
+            const ixL = cx - innerW/2; const ixR = cx + innerW/2;
+            const iyT = cy - innerH/2; const iyB = cy + innerH/2;
+            
+            let innerPathString = "";
+            
+            if (state.beamShape === 'oval') {
+                 innerPathString = `M ${cx - innerW/2} ${cy} A ${innerW/2} ${innerH/2} 0 1 1 ${cx + innerW/2} ${cy} A ${innerW/2} ${innerH/2} 0 1 1 ${cx - innerW/2} ${cy} Z`;
+            } else if (state.beamShape === 'power') {
+                const chamferIn = Math.min(innerW, innerH) * 0.2;
+                innerPathString = `M ${cx - innerW/2 + chamferIn} ${iyT} L ${cx + innerW/2 - chamferIn} ${iyT} L ${cx + innerW/2} ${iyT + chamferIn} L ${cx + innerW/2} ${iyB - chamferIn} L ${cx + innerW/2 - chamferIn} ${iyB} L ${cx - innerW/2 + chamferIn} ${iyB} L ${cx - innerW/2} ${iyB - chamferIn} L ${cx - innerW/2} ${iyT + chamferIn} Z`;
+            } else {
+                innerPathString = `M ${ixL + filletR} ${iyT} L ${ixR - filletR} ${iyT} Q ${ixR} ${iyT} ${ixR} ${iyT + filletR} L ${ixR} ${iyB - filletR} Q ${ixR} ${iyB} ${ixR - filletR} ${iyB} L ${ixL + filletR} ${iyB} Q ${ixL} ${iyB} ${ixL} ${iyB - filletR} L ${ixL} ${iyT + filletR} Q ${ixL} ${iyT} ${ixL + filletR} ${iyT} Z`;
+            }
+            
+            if (state.ledGroove && (state.beamShape === 'rect' || state.beamShape === 'aero')) {
+                 const housingW = grooveDia_px + 4; 
+                 const housingH = grooveTotalD_px + 2; 
+                 innerPathString = `M ${ixL + filletR} ${iyT} L ${cx - housingW/2} ${iyT} L ${cx - housingW/2} ${iyT + housingH} L ${cx + housingW/2} ${iyT + housingH} L ${cx + housingW/2} ${iyT} L ${ixR - filletR} ${iyT} Q ${ixR} ${iyT} ${ixR} ${iyT + filletR} L ${ixR} ${iyB - filletR} Q ${ixR} ${iyB} ${ixR - filletR} ${iyB} L ${ixL + filletR} ${iyB} Q ${ixL} ${iyB} ${ixL} ${iyB - filletR} L ${ixL} ${iyT + filletR} Q ${ixL} ${iyT} ${ixL + filletR} ${iyT} Z`;
+            }
+
+            const beamInnerShape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            beamInnerShape.setAttribute("d", innerPathString);
+            beamInnerShape.setAttribute("fill", "white"); 
+            beamInnerShape.setAttribute("stroke", "#ef4444"); 
+            beamInnerShape.setAttribute("stroke-width", "1");
+            beamInnerShape.setAttribute("opacity", opacityBeam);
+            g.appendChild(beamInnerShape);
+            
+            if(state.ledGroove) {
+                 const grooveGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                 const stem = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                 stem.setAttribute("x", cx - grooveW_px/2); stem.setAttribute("y", cy - H_px/2 + 2); 
+                 stem.setAttribute("width", grooveW_px); stem.setAttribute("height", grooveD_px);
+                 stem.setAttribute("fill", "white"); stem.setAttribute("stroke", "#ef4444"); stem.setAttribute("stroke-width", "0.5");
+                 const belly = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                 belly.setAttribute("cx", cx); belly.setAttribute("cy", cy - H_px/2 + 2 + grooveD_px);
+                 belly.setAttribute("r", grooveDia_px/2);
+                 belly.setAttribute("fill", "white"); belly.setAttribute("stroke", "#ef4444"); belly.setAttribute("stroke-width", "0.5");
+                 grooveGroup.appendChild(stem); grooveGroup.appendChild(belly);
+                 grooveGroup.setAttribute("opacity", opacityBeam);
+                 g.appendChild(grooveGroup);
+            }
+
+            const insertTopNotchW = (grooveDia_px + 4) + 2; 
+            const insertTopNotchH = (grooveTotalD_px + 2) + 2; 
+            const xL = cx - Wi_px/2; const xR = cx + Wi_px/2;
+            const yT = cy - Hi_px/2; const yB = cy + Hi_px/2;
+            const r = filletR; 
+            
+            let insertPathSVG = "";
+            let insertElement = null;
+
+            if (state.insertShape === 'ibeam') {
+                 // DYNAMIC I-BEAM
+                 const flangeT = (state.insertFlangeT / 10) * scale;
+                 const webT = (state.insertWebT / 10) * scale;
+                 const safeFlangeH = Math.min(flangeT, Hi_px * 0.45);
+                 const safeWebW = Math.min(webT, Wi_px * 0.9);
+                 const safeR = Math.min(r, safeFlangeH/2.1, safeWebW/2.1, (Wi_px - safeWebW)/4.1);
+                 
+                 const yWebStart = yT + safeFlangeH; const yWebEnd = yB - safeFlangeH;
+                 const xWebL = cx - safeWebW/2; const xWebR = cx + safeWebW/2;
+
+                 insertPathSVG = `M ${xL + safeR} ${yT}`;
+                 if (state.ledGroove) {
+                     const notchL = cx - insertTopNotchW/2; const notchR = cx + insertTopNotchW/2;
+                     const rNotch = Math.min(r, insertTopNotchW/3);
+                     insertPathSVG += ` L ${notchL} ${yT} L ${notchL} ${yT + insertTopNotchH - rNotch} Q ${notchL} ${yT + insertTopNotchH} ${notchL + rNotch} ${yT + insertTopNotchH} L ${notchR - rNotch} ${yT + insertTopNotchH} Q ${notchR} ${yT + insertTopNotchH} ${notchR} ${yT + insertTopNotchH - rNotch} L ${notchR} ${yT}`;
+                 }
+                 insertPathSVG += ` L ${xR - safeR} ${yT} Q ${xR} ${yT} ${xR} ${yT + safeR}`;
+                 insertPathSVG += ` L ${xR} ${yWebStart - safeR} Q ${xR} ${yWebStart} ${xR - safeR} ${yWebStart}`; 
+                 insertPathSVG += ` L ${xWebR + safeR} ${yWebStart} Q ${xWebR} ${yWebStart} ${xWebR} ${yWebStart + safeR}`; 
+                 insertPathSVG += ` L ${xWebR} ${yWebEnd - safeR} Q ${xWebR} ${yWebEnd} ${xWebR + safeR} ${yWebEnd}`; 
+                 insertPathSVG += ` L ${xR - safeR} ${yWebEnd} Q ${xR} ${yWebEnd} ${xR} ${yWebEnd + safeR}`;
+                 insertPathSVG += ` L ${xR} ${yB - safeR} Q ${xR} ${yB} ${xR - safeR} ${yB}`;
+                 insertPathSVG += ` L ${xL + safeR} ${yB} Q ${xL} ${yB} ${xL} ${yB - safeR}`;
+                 insertPathSVG += ` L ${xL} ${yWebEnd + safeR} Q ${xL} ${yWebEnd} ${xL + safeR} ${yWebEnd}`;
+                 insertPathSVG += ` L ${xWebL - safeR} ${yWebEnd} Q ${xWebL} ${yWebEnd} ${xWebL} ${yWebEnd - safeR}`;
+                 insertPathSVG += ` L ${xWebL} ${yWebStart + safeR} Q ${xWebL} ${yWebStart} ${xWebL - safeR} ${yWebStart}`;
+                 insertPathSVG += ` L ${xL + safeR} ${yWebStart} Q ${xL} ${yWebStart} ${xL} ${yWebStart - safeR}`;
+                 insertPathSVG += ` L ${xL} ${yT + safeR} Q ${xL} ${yT} ${xL + safeR} ${yT} Z`;
+
+                 insertElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                 insertElement.setAttribute("fill-rule", "evenodd"); 
+
+            } else if (state.insertShape === 'hollow') {
+                // HOLLOW BOX
+                let outer = `M ${xL + r} ${yT}`;
+                if (state.ledGroove) {
+                     const notchL = cx - insertTopNotchW/2; const notchR = cx + insertTopNotchW/2;
+                     const rNotch = Math.min(r, insertTopNotchW/3);
+                     outer += ` L ${notchL} ${yT} L ${notchL} ${yT + insertTopNotchH - rNotch} Q ${notchL} ${yT + insertTopNotchH} ${notchL + rNotch} ${yT + insertTopNotchH} L ${notchR - rNotch} ${yT + insertTopNotchH} Q ${notchR} ${yT + insertTopNotchH} ${notchR} ${yT + insertTopNotchH - rNotch} L ${notchR} ${yT}`;
+                }
+                outer += ` L ${xR - r} ${yT} Q ${xR} ${yT} ${xR} ${yT + r}`;
+                outer += ` L ${xR} ${yB - r} Q ${xR} ${yB} ${xR - r} ${yB}`;
+                outer += ` L ${xL + r} ${yB} Q ${xL} ${yB} ${xL} ${yB - r}`;
+                outer += ` L ${xL} ${yT + r} Q ${xL} ${yT} ${xL + r} ${yT} Z`;
+
+                const wallT = (state.insertWallT / 10) * scale;
+                const hxL = xL + wallT; const hxR = xR - wallT;
+                const hyT = yT + wallT; const hyB = yB - wallT;
+                const rInner = Math.max(0.5, r - wallT/2); 
+
+                let inner = "";
+                const notchBottomY = yT + insertTopNotchH;
+                let safeHyT = hyT;
+                if (state.ledGroove && notchBottomY > hyT) safeHyT = Math.max(hyT, notchBottomY + 2);
+                
+                inner = `M ${hxL} ${safeHyT + rInner} L ${hxL} ${hyB - rInner} Q ${hxL} ${hyB} ${hxL + rInner} ${hyB} L ${hxR - rInner} ${hyB} Q ${hxR} ${hyB} ${hxR} ${hyB - rInner} L ${hxR} ${safeHyT + rInner} Q ${hxR} ${safeHyT} ${hxR - rInner} ${safeHyT} L ${hxL + rInner} ${safeHyT} Q ${hxL} ${safeHyT} ${hxL} ${safeHyT + rInner} Z`;
+                insertPathSVG = outer + " " + inner;
+
+                insertElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                insertElement.setAttribute("fill-rule", "evenodd"); 
+
+            } else if (state.insertShape === 'xrib') {
+                // DYNAMIC X-RIB
+                const wallT = (state.insertWallT / 10) * scale;
+                const ribT = (state.insertRibT / 10) * scale;
+                const safeWallT = Math.min(wallT, Wi_px * 0.3);
+                
+                let outer = `M ${xL + r} ${yT}`;
+                if (state.ledGroove) {
+                     const notchL = cx - insertTopNotchW/2; const notchR = cx + insertTopNotchW/2;
+                     const rNotch = Math.min(r, insertTopNotchW/3);
+                     outer += ` L ${notchL} ${yT} L ${notchL} ${yT + insertTopNotchH - rNotch} Q ${notchL} ${yT + insertTopNotchH} ${notchL + rNotch} ${yT + insertTopNotchH} L ${notchR - rNotch} ${yT + insertTopNotchH} Q ${notchR} ${yT + insertTopNotchH} ${notchR} ${yT + insertTopNotchH - rNotch} L ${notchR} ${yT}`;
+                }
+                outer += ` L ${xR - r} ${yT} Q ${xR} ${yT} ${xR} ${yT + r}`;
+                outer += ` L ${xR} ${yB - r} Q ${xR} ${yB} ${xR - r} ${yB}`;
+                outer += ` L ${xL + r} ${yB} Q ${xL} ${yB} ${xL} ${yB - r}`;
+                outer += ` L ${xL} ${yT + r} Q ${xL} ${yT} ${xL + r} ${yT} Z`;
+
+                const ixL = xL + safeWallT; const ixR = xR - safeWallT;
+                let iyT = yT + safeWallT; const iyB = yB - safeWallT;
+                if (state.ledGroove) {
+                    const notchBottomY = yT + insertTopNotchH;
+                    if (notchBottomY > iyT) iyT = notchBottomY + 2;
+                }
+
+                let holes = "";
+                const innerW = ixR - ixL;
+                const innerH = iyB - iyT;
+                
+                if (innerW > 0 && innerH > 0 && ribT > 0) {
+                    const dy = innerH / 2;
+                    const hT = ribT / 2;
+                    
+                    const cyInner = iyT + innerH/2;
+                    const xCenterL = cx - hT;
+                    const xCenterR = cx + hT;
+                    
+                    holes += `M ${ixL} ${iyT} L ${xCenterL} ${cyInner} L ${ixL} ${cyInner} Z `;
+                    holes += `M ${ixR} ${iyT} L ${xCenterR} ${cyInner} L ${ixR} ${cyInner} Z `;
+                    holes += `M ${ixL} ${iyB} L ${xCenterL} ${cyInner} L ${ixL} ${cyInner} Z `;
+                    holes += `M ${ixR} ${iyB} L ${xCenterR} ${cyInner} L ${ixR} ${cyInner} Z `;
+                }
+                insertPathSVG = outer + " " + holes;
+
+                insertElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                insertElement.setAttribute("fill-rule", "evenodd"); 
+
+            } else if (state.insertShape === 'c_channel') {
+                // SOLUZIONE C/R: Canale a C con raccordi interni
+                const rInt = (state.insertRadiusInternal / 10) * scale;
+                const Tt_px = (state.insertFlangeT / 10) * scale; // Spessore Top
+                const Tb_px = (state.insertWebT / 10) * scale;    // Spessore Bottom
+                const Tw_px = (state.insertWallT / 10) * scale;   // Spessore Verticale
+
+                const maxR = Math.min(Tt_px, Tb_px, Hi_px / 2, Tw_px);
+                const safeRInt = Math.min(rInt, maxR - 0.5);
+                
+                let outer = `M ${xL + r} ${yT}`;
+                if (state.ledGroove) {
+                    const notchL = cx - insertTopNotchW/2; const notchR = cx + insertTopNotchW/2;
+                    const rNotch = Math.min(r, insertTopNotchW/3);
+                    outer += ` L ${notchL} ${yT} L ${notchL} ${yT + insertTopNotchH - rNotch} Q ${notchL} ${yT + insertTopNotchH} ${notchL + rNotch} ${yT + insertTopNotchH} L ${notchR - rNotch} ${yT + insertTopNotchH} Q ${notchR} ${yT + insertTopNotchH} ${notchR} ${yT + insertTopNotchH - rNotch} L ${notchR} ${yT}`;
+                }
+                outer += ` L ${xR - r} ${yT} Q ${xR} ${yT} ${xR} ${yT + r}`;
+                outer += ` L ${xR} ${yB - r} Q ${xR} ${yB} ${xR - r} ${yB}`;
+                outer += ` L ${xL + r} ${yB} Q ${xL} ${yB} ${xL} ${yB - r}`;
+                outer += ` L ${xL} ${yT + r} Q ${xL} ${yT} ${xL + r} ${yT} Z`;
+
+                const ixL_inner = xL + Tw_px; 
+                const iyT_inner = yT + Tt_px; 
+                const iyB_inner = yB - Tb_px; 
+                
+                let yStartSafe = iyT_inner;
+                if (state.ledGroove) {
+                    const notchBottomY = yT + insertTopNotchH; 
+                    yStartSafe = Math.max(iyT_inner, notchBottomY + 2); 
+                }
+
+                let inner = `M ${xR - 1} ${yStartSafe}`; 
+                inner += ` L ${ixL_inner + safeRInt} ${yStartSafe}`; 
+                inner += ` A ${safeRInt} ${safeRInt} 0 0 0 ${ixL_inner} ${yStartSafe + safeRInt}`;
+                inner += ` L ${ixL_inner} ${iyB_inner - safeRInt}`; 
+                inner += ` A ${safeRInt} ${safeRInt} 0 0 0 ${ixL_inner + safeRInt} ${iyB_inner}`;
+                inner += ` L ${xR - 1} ${iyB_inner}`; 
+                inner += ` Z`;
+                
+                insertPathSVG = outer + " " + inner;
+                insertElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                insertElement.setAttribute("fill-rule", "evenodd"); 
+
+            } else {
+                // SOLID BOX (Default)
+                insertPathSVG = `M ${xL + r} ${yT}`;
+                if (state.ledGroove) {
+                     const notchL = cx - insertTopNotchW/2; const notchR = cx + insertTopNotchW/2;
+                     const rNotch = Math.min(r, insertTopNotchW/3);
+                     insertPathSVG += ` L ${notchL} ${yT} L ${notchL} ${yT + insertTopNotchH - rNotch} Q ${notchL} ${yT + insertTopNotchH} ${notchL + rNotch} ${yT + insertTopNotchH} L ${notchR - rNotch} ${yT + insertTopNotchH} Q ${notchR} ${yT + insertTopNotchH} ${notchR} ${yT + insertTopNotchH - rNotch} L ${notchR} ${yT}`;
+                }
+                insertPathSVG += ` L ${xR - r} ${yT} Q ${xR} ${yT} ${xR} ${yT + r}`;
+                insertPathSVG += ` L ${xR} ${yB - r} Q ${xR} ${yB} ${xR - r} ${yB}`;
+                insertPathSVG += ` L ${xL + r} ${yB} Q ${xL} ${yB} ${xL} ${yB - r}`;
+                insertPathSVG += ` L ${xL} ${yT + r} Q ${xL} ${yT} ${xL + r} ${yT} Z`;
+                
+                insertElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                insertElement.setAttribute("fill-rule", "nonzero");
+            }
+            
+            if (!insertElement) return;
+
+            insertElement.setAttribute("d", insertPathSVG);
+            insertElement.setAttribute("fill", "#e5e5e5"); 
+            insertElement.setAttribute("stroke", "#525252"); 
+            insertElement.setAttribute("stroke-width", "1");
+            insertElement.setAttribute("opacity", opacityInsert);
+            g.appendChild(insertElement); 
+
+            const innerBeamW_real = W - 2*(state.thicknessH/10);
+            const innerBeamH_real = H - 2*(state.thicknessV/10);
+            
+            let collision = false;
+            if ((Wi > innerBeamW_real + 0.01) || (Hi > innerBeamH_real + 0.01)) collision = true;
+            if (collision) {
+                ui.displays.collisionAlert.textContent = "⚠️ INTERFERENZA";
+                ui.displays.collisionAlert.classList.remove('hidden');
+                insertElement.setAttribute("fill", "#fca5a5");
+                insertElement.setAttribute("stroke", "#b91c1c");
+            } else {
+                ui.displays.collisionAlert.classList.add('hidden');
+            }
+
+            const dimColor = "#525252";
+            const fontS = "10px";
+            const drawDim = (x1, y1, x2, y2, text, offset, axis, active) => {
+                if (!active) return;
+                const isHoriz = axis === 'h';
+                let lx1=x1, ly1=y1, lx2=x2, ly2=y2;
+                let tx, ty;
+                if(isHoriz) {
+                    ly1 += offset; ly2 += offset;
+                    const dLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    dLine.setAttribute("x1", lx1); dLine.setAttribute("y1", ly1); dLine.setAttribute("x2", lx2); dLine.setAttribute("y2", ly2);
+                    dLine.setAttribute("stroke", dimColor); dLine.setAttribute("marker-end", "url(#arrow-sm)"); dLine.setAttribute("marker-start", "url(#arrow-sm-rev)");
+                    g.appendChild(dLine);
+                    tx = (lx1+lx2)/2; ty = ly1 - 3;
+                } else {
+                    lx1 -= offset; lx2 -= offset;
+                    const dLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    dLine.setAttribute("x1", lx1); dLine.setAttribute("y1", ly1); dLine.setAttribute("x2", lx2); dLine.setAttribute("y2", ly2);
+                    dLine.setAttribute("stroke", dimColor); dLine.setAttribute("marker-end", "url(#arrow-sm)"); dLine.setAttribute("marker-start", "url(#arrow-sm-rev)");
+                    g.appendChild(dLine);
+                    tx = lx1 - 5; ty = (ly1+ly2)/2 + 3;
+                }
+                const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                txt.setAttribute("x", tx); txt.setAttribute("y", ty);
+                txt.setAttribute("text-anchor", isHoriz ? "middle" : "end");
+                txt.setAttribute("fill", dimColor); txt.setAttribute("font-size", fontS);
+                txt.textContent = text;
+                g.appendChild(txt);
+            };
+
+            drawDim(cx - W_px/2, cy + H_px/2, cx + W_px/2, cy + H_px/2, `${W}cm [Z]`, 20, 'h', state.previewMode === 'beam');
+            drawDim(cx - W_px/2, cy - H_px/2, cx - W_px/2, cy + H_px/2, `${H}cm [Y]`, 20, 'v', state.previewMode === 'beam');
+            drawDim(cx - Wi_px/2, cy - Hi_px/2, cx + Wi_px/2, cy - Hi_px/2, `Wi ${Wi} [Z]`, -15, 'h', state.previewMode === 'insert');
+            drawDim(cx + Wi_px/2, cy - Hi_px/2, cx + Wi_px/2, cy + Hi_px/2, `Hi ${Hi} [Y]`, -15, 'v', state.previewMode === 'insert');
+            svg.appendChild(g);
+
+            const axisGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            axisGroup.appendChild(createSVG('line', { x1: 20, y1: cy, x2: wContainer-20, y2: cy, stroke: "#2563eb", "stroke-dasharray": "5,3", "stroke-width": 2 }));
+            axisGroup.appendChild(createSVG('text', { x: wContainer - 15, y: cy - 5, fill: "#2563eb", "font-size": "12", "font-weight": "bold", textContent: "Z" }));
+            axisGroup.appendChild(createSVG('line', { x1: cx, y1: 20, x2: cx, y2: hContainer-20, stroke: "#16a34a", "stroke-dasharray": "5,3", "stroke-width": 2 }));
+            axisGroup.appendChild(createSVG('text', { x: cx + 5, y: 15, fill: "#16a34a", "font-size": "12", "font-weight": "bold", textContent: "Y" }));
+            svg.appendChild(axisGroup);
+        }
+
+        function setMode(mode) {
+            state.mode = mode;
+            if (mode === 'mass') {
+                ui.controls.btnMass.className = "flex-1 py-2 rounded shadow-sm bg-white text-black font-bold border-2 border-gibus-yellow transition-all";
+                ui.controls.btnPulley.className = "flex-1 py-2 rounded text-neutral-500 hover:text-black transition-all border border-transparent";
+                ui.controls.panelMass.classList.remove('hidden');
+                ui.controls.panelPulley.classList.add('hidden');
+            } else {
+                ui.controls.btnMass.className = "flex-1 py-2 rounded text-neutral-500 hover:text-black transition-all border border-transparent";
+                ui.controls.btnPulley.className = "flex-1 py-2 rounded shadow-sm bg-white text-black font-bold border-2 border-gibus-yellow transition-all";
+                ui.controls.panelMass.classList.add('hidden');
+                ui.controls.panelPulley.classList.remove('hidden');
+            }
+            update();
+        }
+
+        // === HYBRID FEM SOLVER (Stable Logic from Trave_4, Features from Trave_3) ===
+        function solveBeamSystem() {
+            const numSegments = 100; // Ridotto leggermente per stabilità
+            const ds = state.length / numSegments;
+            
+            // --- 1. CALCOLO INERZIE (Logica Avanzata di Trave_3) ---
+            let I_beam, beamHeight_m, beamArea_m2;
+            
+            if (state.customProfile) {
+                const I_mm4 = state.customProfile.I_mm4;
+                I_beam = I_mm4 * 1e-12; 
+                beamHeight_m = state.customProfile.height_mm / 1000;
+                beamArea_m2 = state.customProfile.area_mm2 * 1e-6; 
+            } else {
+                const HT_m = state.height / 100; const WT_m = state.width / 100;
+                const S_v_m = state.thicknessV / 1000; const S_h_m = state.thicknessH / 1000;
+                
+                let I_outer = (WT_m * Math.pow(HT_m, 3)) / 12;
+                let Area_outer = WT_m * HT_m; 
+                
+                const W_inner = Math.max(0, WT_m - 2*S_v_m); 
+                const H_inner = Math.max(0, HT_m - 2*S_h_m); 
+                let I_inner = (W_inner * Math.pow(H_inner, 3)) / 12;
+                const Area_inner = W_inner * H_inner;
+                
+                if (state.beamShape === 'aero') { I_outer *= 1.15; Area_outer *= 1.1; }
+                else if (state.beamShape === 'oval') {
+                    I_outer = (Math.PI/4) * (WT_m/2) * Math.pow(HT_m/2, 3);
+                    I_inner = (Math.PI/4) * (W_inner/2) * Math.pow(H_inner/2, 3);
+                    Area_outer = Math.PI * (WT_m/2) * (HT_m/2);
+                } else if (state.beamShape === 'power') { I_outer *= 0.95; }
+                
+                // === FIX LED GROOVE INERTIA ===
+                // Use realistic dimensions for "Alloggio P"
+                if (state.ledGroove) { 
+                    const notchW_m = 0.012; // 12mm width
+                    const notchH_m = 0.008; // 8mm depth (realistic for housing)
+                    const notchArea = notchW_m * notchH_m;
+                    
+                    // Steiner Theorem: Subtraction of Area * d^2
+                    // d = distance from neutral axis (H/2) to centroid of notch (approx H/2 - notchH/2)
+                    // We assume notch is at the very top fiber.
+                    const dist = (HT_m / 2) - (notchH_m / 2);
+                    const notchInertiaTransport = notchArea * Math.pow(dist, 2);
+                    
+                    // Local inertia of the notch (small but technically there)
+                    const notchInertiaLocal = (notchW_m * Math.pow(notchH_m, 3)) / 12;
+                    
+                    I_outer -= (notchInertiaTransport + notchInertiaLocal); 
+                    Area_outer -= notchArea; 
+                }
+
+                I_beam = Math.max(1e-10, I_outer - I_inner);
+                beamArea_m2 = Math.max(0, Area_outer - Area_inner); 
+                beamHeight_m = HT_m;
+            }
+            const beamWeightPerMeter = beamArea_m2 * CONSTANTS.densityAluminum;
+
+            let I_insert_crit, H_crit_m;
+            if (state.customInsertProfile) {
+                const I_mm4 = state.customInsertProfile.I_mm4;
+                I_insert_crit = I_mm4 * 1e-12; 
+                H_crit_m = state.customInsertProfile.height_mm / 1000;
+            } else {
+                H_crit_m = state.insertHeight / 100;
+                const W_crit_m = state.insertWidth / 100;
+                
+                // Logica complessa di Trave_3 per le forme
+                if (state.insertShape === 'ibeam') {
+                    const f_h = Math.min(state.insertFlangeT / 1000, H_crit_m*0.49);
+                    const w_w = Math.min(state.insertWebT / 1000, W_crit_m*0.99);
+                    const I_total_rect = (W_crit_m * Math.pow(H_crit_m, 3)) / 12;
+                    const voidW = (W_crit_m - w_w);
+                    const voidH = (H_crit_m - 2*f_h);
+                    const I_voids = (voidW * Math.pow(voidH, 3)) / 12;
+                    I_insert_crit = Math.max(1e-10, I_total_rect - I_voids);
+                } else if (state.insertShape === 'hollow' || state.insertShape === 'xrib') {
+                    const wall_t = (state.insertWallT / 1000); 
+                    let I_total_rect = (W_crit_m * Math.pow(H_crit_m, 3)) / 12;
+                    let I_void = ((W_crit_m - 2*wall_t) * Math.pow(H_crit_m - 2*wall_t, 3)) / 12;
+                    I_insert_crit = Math.max(1e-10, I_total_rect - I_void);
+                    if (state.insertShape === 'xrib') I_insert_crit *= 1.2;
+                } else if (state.insertShape === 'c_channel') {
+                    const Tt_m = state.insertFlangeT / 1000;
+                    const Tb_m = state.insertWebT / 1000;
+                    const Tw_m = state.insertWallT / 1000;
+                    let I_total_rect = (W_crit_m * Math.pow(H_crit_m, 3)) / 12;
+                    const H_cavity = H_crit_m - Tt_m - Tb_m;
+                    const W_cavity = W_crit_m - Tw_m;
+                    const I_rect_cavity = (W_cavity * Math.pow(H_cavity, 3)) / 12;
+                    I_insert_crit = Math.max(1e-10, I_total_rect - I_rect_cavity);
+                } else {
+                    I_insert_crit = (W_crit_m * Math.pow(H_crit_m, 3)) / 12; 
+                }
+                
+                // === FIX LED GROOVE INERTIA FOR INSERT ===
+                // The groove cuts the top flange of the insert.
+                if (state.ledGroove) {
+                     // Dimensions for insert notch (slightly wider than beam groove to fit)
+                     const notchW_i = 0.014; 
+                     const notchH_i = 0.010; 
+                     const notchArea_i = notchW_i * notchH_i;
+                     const dist_i = (H_crit_m / 2) - (notchH_i / 2);
+                     
+                     // Steiner subtraction
+                     const removal = notchArea_i * Math.pow(dist_i, 2);
+                     const local_removal = (notchW_i * Math.pow(notchH_i, 3)) / 12;
+                     
+                     I_insert_crit -= (removal + local_removal);
+                     I_insert_crit = Math.max(1e-11, I_insert_crit); // Prevent negative
+                } 
+            }
+
+            // --- FATTORE TEMPERATURA ---
+            // Modulo di elasticità: diminuisce di circa 0.04% per grado sopra i 20°C (approx lineare)
+            // Snervamento: diminuisce di circa 0.15% per grado sopra i 20°C (approx lineare)
+            // A basse temperature (<20), l'alluminio guadagna leggermente forza (non diventa fragile come l'acciaio)
+            
+            const tempDiff = state.temperature - 20; 
+            
+            let factorE = 1.0;
+            let factorYield = 1.0;
+            let factorTensile = 1.0; // Separate factor for ultimate strength
+
+            if (tempDiff > 0) {
+                factorE = 1.0 - (0.0004 * tempDiff); 
+                factorYield = 1.0 - (0.0015 * tempDiff);
+                // Ultimate strength usually degrades similarly or slightly slower, lets assume similar for now
+                factorTensile = 1.0 - (0.0012 * tempDiff); 
+            } else {
+                // Effetto freddo (più limitato)
+                factorE = 1.0 + (0.0002 * Math.abs(tempDiff));
+                factorYield = 1.0 + (0.0005 * Math.abs(tempDiff));
+                factorTensile = 1.0 + (0.0005 * Math.abs(tempDiff));
+            }
+            
+            // Limitiamo i fattori per sicurezza simulativa
+            factorE = Math.max(0.8, Math.min(1.1, factorE));
+            factorYield = Math.max(0.6, Math.min(1.15, factorYield));
+            factorTensile = Math.max(0.6, Math.min(1.15, factorTensile));
+
+            const matBeam = MATERIALS[state.beamMatKey];
+            const matInsert = MATERIALS[state.insertMatKey];
+            const E_beam = (matBeam.E * factorE) * 1e9;
+            const E_insert = (matInsert.E * factorE) * 1e9;
+            
+            const beamYieldEff = matBeam.yield * factorYield;
+            const insertYieldEff = matInsert.yield * factorYield * (1 - state.porosity/100);
+            
+            // NEW: Effective Ultimate Strength (Rottura)
+            const beamTensileEff = matBeam.tensile * factorTensile;
+            const insertTensileEff = matInsert.tensile * factorTensile * (1 - state.porosity/100);
+
+            const EI_beam = E_beam * I_beam;
+            const EI_exposed = E_insert * I_insert_crit;
+            const EI_stiff = EI_beam * 10; 
+
+            const distWall_m = state.distWall / 100;
+            const penetration_m = state.penetration / 100;
+            const pulleyX = state.length;
+            const pulleyY = state.pulleyY;
+            const yieldMomentInsert = (insertYieldEff * 1e6 * I_insert_crit) / (H_crit_m / 2); 
+            const yieldMomentBeam = (beamYieldEff * 1e6 * I_beam) / (beamHeight_m / 2); 
+
+            let nodes = [];
+            for(let i=0; i<=numSegments; i++) {
+                nodes.push({ s: i * ds, x: i * ds, y: 0, theta: 0, moment: 0, kappa_plastic: 0 });
+            }
+
+            // --- 2. SOLUTORE ITERATIVO (Logica Stabile di Trave_4) ---
+            let finalFx = 0, finalFy = 0;
+            const maxIter = 50; 
+            const alpha = 0.02; 
+
+            for(let iter=0; iter<maxIter; iter++) {
+                const tipNode = nodes[numSegments];
+                let Fx = 0, Fy = 0;
+
+                if (state.mode === 'mass') {
+                    Fx = 0;
+                    Fy = state.mass * CONSTANTS.g;
+                } else {
+                    // Logica Vettoriale Robusta (come Trave_4)
+                    const dx = pulleyX - tipNode.x;
+                    const dy = pulleyY - tipNode.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > 0.001) {
+                        Fx = (dx / dist) * state.pulleyForce;
+                        Fy = (dy / dist) * state.pulleyForce;
+                    }
+                }
+                finalFx = Fx; finalFy = Fy;
+
+                // Calcolo Momenti (Logica leva semplice di Trave_4)
+                for(let i=0; i<=numSegments; i++) {
+                    const leverArmX = tipNode.x - nodes[i].x;
+                    const leverArmY = tipNode.y - nodes[i].y;
+                    // Momento = Forza * Braccio (Fy verso il basso è positivo nel calcolo del momento flettente qui)
+                    let M = Fy * leverArmX - Fx * leverArmY;
+                    nodes[i].moment = Math.max(0, M); 
+                }
+
+                // Integrazione
+                let currentTheta = 0;
+                let currentX = 0;
+                let currentY = 0;
+                nodes[0].x = 0; nodes[0].y = 0; nodes[0].theta = 0;
+
+                for(let i=0; i<numSegments; i++) {
+                    const s_mid = (nodes[i].s + nodes[i+1].s) / 2;
+                    let EI = EI_beam;
+                    let M_yield = yieldMomentBeam;
+
+                    if (s_mid < distWall_m) { EI = EI_exposed; M_yield = yieldMomentInsert; }
+                    else if (s_mid < distWall_m + penetration_m) { EI = EI_stiff; M_yield = yieldMomentBeam * 2; }
+
+                    const M_avg = (nodes[i].moment + nodes[i+1].moment) / 2;
+                    let kappa = 0;
+
+                    if (M_avg <= M_yield) {
+                        kappa = M_avg / EI;
+                        nodes[i].kappa_plastic = 0; 
+                    } else {
+                        const ky = M_yield / EI;
+                        const M_excess = M_avg - M_yield;
+                        kappa = ky + M_excess / (alpha * EI);
+                        nodes[i].kappa_plastic = kappa - (M_avg / EI); 
+                    }
+                    
+                    const dTheta = kappa * ds;
+                    const nextTheta = currentTheta + dTheta;
+                    const avgTheta = (currentTheta + nextTheta) / 2; // Midpoint rule
+                    
+                    // Integrazione geometrica stabile
+                    currentX += Math.cos(avgTheta) * ds;
+                    currentY += Math.sin(avgTheta) * ds;
+                    currentTheta = nextTheta;
+
+                    nodes[i+1].theta = currentTheta;
+                    nodes[i+1].x = currentX;
+                    nodes[i+1].y = currentY;
+                }
+            }
+
+            // --- 3. SOLUTORE RESIDUO (Logica Trave_4) ---
+            let residualNodes = JSON.parse(JSON.stringify(nodes)); 
+            const residualLoad = state.massResidual * CONSTANTS.g; 
+            
+            for(let iter=0; iter<15; iter++) {
+                 const rTip = residualNodes[numSegments];
+                 for(let i=0; i<=numSegments; i++) {
+                    const lx = rTip.x - residualNodes[i].x;
+                    residualNodes[i].moment = Math.max(0, residualLoad * lx);
+                 }
+                
+                 let rTheta = 0; let rX = 0; let rY = 0;
+                 residualNodes[0].x = 0; residualNodes[0].y = 0; residualNodes[0].theta = 0;
+
+                 for(let i=0; i<numSegments; i++) {
+                     const s_mid = (nodes[i].s + nodes[i+1].s) / 2;
+                     let EI = EI_beam;
+                     if (s_mid < distWall_m) EI = EI_exposed;
+                     else if (s_mid < distWall_m + penetration_m) EI = EI_stiff;
+
+                     const M_res = (residualNodes[i].moment + residualNodes[i+1].moment) / 2;
+                     const kappa_elastic = M_res / EI;
+                     const kappa_tot = kappa_elastic + nodes[i].kappa_plastic; 
+                     
+                     const dTheta = kappa_tot * ds;
+                     const nextTheta = rTheta + dTheta;
+                     const avgTheta = (rTheta + nextTheta) / 2;
+
+                     rX += Math.cos(avgTheta) * ds;
+                     rY += Math.sin(avgTheta) * ds;
+                     rTheta = nextTheta;
+                     
+                     residualNodes[i+1].theta = rTheta;
+                     residualNodes[i+1].x = rX;
+                     residualNodes[i+1].y = rY;
+                 }
+            }
+
+            // Risultati
+            const momentWall = nodes[0].moment; 
+            const stressInsert = (momentWall * (H_crit_m / 2)) / I_insert_crit;
+            const startBeamIndex = Math.floor((distWall_m + penetration_m) / ds);
+            let maxMomentBeam = 0;
+            for(let i=startBeamIndex; i<=numSegments; i++) {
+                if(nodes[i].moment > maxMomentBeam) maxMomentBeam = nodes[i].moment;
+            }
+            if (maxMomentBeam === 0 && startBeamIndex < numSegments) maxMomentBeam = nodes[startBeamIndex].moment;
+            const stressBeam = (maxMomentBeam * (beamHeight_m / 2)) / I_beam;
+
+            // Per reporting UI
+            const finalBeamLimit = beamYieldEff;
+            const finalInsertLimit = insertYieldEff;
+            const finalBeamTensile = beamTensileEff;
+            const finalInsertTensile = insertTensileEff;
+
+            return { 
+                nodes, residualNodes,
+                momentBeam: maxMomentBeam, momentWall, stressBeam, stressInsert, 
+                tipNode: nodes[numSegments], residualTipNode: residualNodes[numSegments],
+                distWall_m, penetration_m, pulleyPos: {x: pulleyX, y: pulleyY},
+                forces: { x: finalFx, y: finalFy }, I_beam_val: I_beam, I_insert_val: I_insert_crit,
+                beamWeightPerMeter,
+                finalBeamLimit, finalInsertLimit,
+                finalBeamTensile, finalInsertTensile
+            };
+        }
+
+        function updateBadge(badgeEl, value, yieldLimit, tensileLimit, textEl) {
+            if (!badgeEl) return;
+            // Logica "Rottura" (Collapse)
+            if (value > tensileLimit) {
+                badgeEl.textContent = "ROTTURA";
+                badgeEl.className = "px-1.5 py-0.5 rounded text-[9px] font-bold bg-black text-white border border-red-600 animate-pulse";
+                if (textEl) textEl.className = "text-xl font-bold font-mono text-red-900";
+            } else if (value > yieldLimit) {
+                badgeEl.textContent = "CRITICO";
+                badgeEl.className = "px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 animate-pulse";
+                if (textEl) textEl.className = "text-xl font-bold font-mono text-red-600";
+            } else if (value > yieldLimit * 0.8) {
+                badgeEl.textContent = "ATTENZIONE";
+                badgeEl.className = "px-1.5 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-700";
+                if (textEl) textEl.className = "text-xl font-bold font-mono text-yellow-600";
+            } else {
+                badgeEl.textContent = "OK";
+                badgeEl.className = "px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700";
+                if (textEl) textEl.className = "text-xl font-bold font-mono text-black";
             }
         }
 
-        // ==================== MAIN CALCULATION ====================
-        function calculate() {
-            log('Avvio analisi FEM...', 'info');
+        function update() {
+            // Lettura input UI (Massive read)
+            state.mass = safeVal(ui.inputs.mass);
+            state.massResidual = safeVal(ui.inputs.massResidual); 
+            state.pulleyForce = safeVal(ui.inputs.pulleyForce);
+            state.pulleyY = safeVal(ui.inputs.pulleyY);
+            state.length = safeVal(ui.inputs.length);
+            state.penetration = safeVal(ui.inputs.penetration);
+            state.distWall = safeVal(ui.inputs.distWall);
+            state.height = safeVal(ui.inputs.height);
+            state.width = safeVal(ui.inputs.width);
+            state.thicknessV = safeVal(ui.inputs.thicknessV);
+            state.thicknessH = safeVal(ui.inputs.thicknessH);
+            state.numBolts = safeInt(ui.inputs.bolts);
+            state.beamMatKey = safeStr(ui.inputs.matBeam, '6061-T6');
+            state.insertMatKey = safeStr(ui.inputs.matInsert, '46100-F');
+            state.porosity = safeVal(ui.inputs.porosity);
+            state.scaleFactor = safeVal(ui.inputs.scale);
+            state.beamShape = safeStr(ui.inputs.beamShape, 'rect'); 
+            state.insertShape = safeStr(ui.inputs.insertShape, 'solid'); 
+            state.insertFlangeT = safeVal(ui.inputs.insertFlange); 
+            state.insertWebT = safeVal(ui.inputs.insertWeb); 
+            state.insertWallT = safeVal(ui.inputs.insertWall); 
+            state.insertRibT = safeVal(ui.inputs.insertRib); 
+            state.insertRadiusInternal = safeVal(ui.inputs.insertRadiusInternal); 
+            if (state.insertShape === 'c_channel') {
+                 state.insertFlangeT = safeVal(ui.inputs.insertFlangeC); 
+                 state.insertWebT = safeVal(ui.inputs.insertWebC); 
+                 state.insertWallT = safeVal(ui.inputs.insertWallC); 
+            }
+            state.autoFit = ui.inputs.autoFit.checked;
+            state.filletRadius = safeVal(ui.inputs.fillet);
+            state.ledGroove = ui.inputs.ledGroove.checked;
+            state.temperature = safeVal(ui.inputs.temperature);
+
+            // UI Toggle Logic
+            const isIbeam = state.insertShape === 'ibeam';
+            const isXrib = state.insertShape === 'xrib';
+            const isCchannel = state.insertShape === 'c_channel';
+            const needsAdvancedControls = isIbeam || isXrib || isCchannel;
+            if (ui.controls.advInsertControls) ui.controls.advInsertControls.classList.toggle('hidden', !needsAdvancedControls);
+            if (ui.controls.fieldsIbeam) ui.controls.fieldsIbeam.classList.toggle('hidden', !isIbeam);
+            if (ui.controls.fieldsXrib) ui.controls.fieldsXrib.classList.toggle('hidden', !isXrib);
+            if (ui.controls.fieldsCChannel) ui.controls.fieldsCChannel.classList.toggle('hidden', !isCchannel);
+
+            // Auto-Fit Logic
+            if(state.penetration/100 >= state.length) {
+                state.penetration = (state.length * 100) - 10;
+                if(ui.inputs.penetration) ui.inputs.penetration.value = state.penetration;
+            }
+            const maxH_insert = state.height - 2*(state.thicknessV/10);
+            const maxW_insert = state.width - 2*(state.thicknessH/10);
+            
+            // --- LOGICA AUTO-FIT ---
+            if (state.autoFit) {
+                state.insertHeight = Math.max(0.1, parseFloat(maxH_insert.toFixed(1)));
+                state.insertWidth = Math.max(0.1, parseFloat(maxW_insert.toFixed(1)));
+                
+                if(ui.inputs.insertHeight) ui.inputs.insertHeight.value = state.insertHeight;
+                if(ui.inputs.insertWidth) ui.inputs.insertWidth.value = state.insertWidth;
+                
+                if(ui.inputs.insertHeight) ui.inputs.insertHeight.classList.add('opacity-50', 'pointer-events-none');
+                if(ui.inputs.insertWidth) ui.inputs.insertWidth.classList.add('opacity-50', 'pointer-events-none');
+                if(ui.controls.manualInsert) ui.controls.manualInsert.classList.add('opacity-50'); 
+            } else {
+                state.insertHeight = safeVal(ui.inputs.insertHeight);
+                state.insertWidth = safeVal(ui.inputs.insertWidth);
+                
+                if(ui.inputs.insertHeight) ui.inputs.insertHeight.classList.remove('opacity-50', 'pointer-events-none');
+                if(ui.inputs.insertWidth) ui.inputs.insertWidth.classList.remove('opacity-50', 'pointer-events-none');
+                if(ui.controls.manualInsert) ui.controls.manualInsert.classList.remove('opacity-50');
+            }
+
+            // --- AGGIORNAMENTO DISPLAY VALORI ACCANTO AGLI SLIDER ---
+            if(ui.displays.valHeight) ui.displays.valHeight.textContent = state.height + " cm";
+            if(ui.displays.valWidth) ui.displays.valWidth.textContent = state.width + " cm";
+            if(ui.displays.valThicknessV) ui.displays.valThicknessV.textContent = state.thicknessV + " mm";
+            if(ui.displays.valThicknessH) ui.displays.valThicknessH.textContent = state.thicknessH + " mm";
+            if(ui.displays.valFillet) ui.displays.valFillet.textContent = state.filletRadius + " mm";
+            
+            if(ui.displays.valInsertHeight) ui.displays.valInsertHeight.textContent = state.insertHeight.toFixed(1) + " cm";
+            if(ui.displays.valInsertWidth) ui.displays.valInsertWidth.textContent = state.insertWidth.toFixed(1) + " cm";
+            
+            if(ui.displays.mass) ui.displays.mass.textContent = state.mass + " kg";
+            if(ui.displays.massResidual) ui.displays.massResidual.textContent = state.massResidual + " kg";
+            if(ui.displays.pulleyForce) ui.displays.pulleyForce.textContent = state.pulleyForce + " N";
+            if(ui.displays.pulleyY) ui.displays.pulleyY.textContent = state.pulleyY.toFixed(1) + " m";
+            if(ui.displays.length) ui.displays.length.textContent = state.length.toFixed(1) + " m";
+            if(ui.displays.penetration) ui.displays.penetration.textContent = state.penetration + " cm";
+            if(ui.displays.distWall) ui.displays.distWall.textContent = state.distWall + " cm";
+            if(ui.displays.bolts) ui.displays.bolts.textContent = state.numBolts;
+            if(ui.displays.scale) ui.displays.scale.textContent = state.scaleFactor + "x";
+            if(ui.displays.porosity) ui.displays.porosity.textContent = state.porosity + "%";
+            
+            if(ui.displays.valTemperature) {
+                ui.displays.valTemperature.textContent = state.temperature + " °C";
+                if (state.temperature > 50) ui.displays.valTemperature.className = "text-xs font-bold text-white bg-red-500 px-2 py-0.5 rounded";
+                else if (state.temperature < 0) ui.displays.valTemperature.className = "text-xs font-bold text-white bg-blue-700 px-2 py-0.5 rounded";
+                else ui.displays.valTemperature.className = "text-xs font-bold text-white bg-blue-500 px-2 py-0.5 rounded";
+            }
+
+            // Aggiornamento display per pannelli avanzati
+            if(ui.displays.valInsertFlange) ui.displays.valInsertFlange.textContent = state.insertFlangeT + " mm";
+            if(ui.displays.valInsertWeb) ui.displays.valInsertWeb.textContent = state.insertWebT + " mm";
+            if(ui.displays.valInsertWall) ui.displays.valInsertWall.textContent = state.insertWallT + " mm";
+            if(ui.displays.valInsertRib) ui.displays.valInsertRib.textContent = state.insertRibT + " mm";
+            if(ui.displays.valInsertFlangeC) ui.displays.valInsertFlangeC.textContent = state.insertFlangeT + " mm";
+            if(ui.displays.valInsertWebC) ui.displays.valInsertWebC.textContent = state.insertWebT + " mm";
+            if(ui.displays.valInsertWallC) ui.displays.valInsertWallC.textContent = state.insertWallT + " mm";
+            if(ui.displays.valInsertRadiusInternal) ui.displays.valInsertRadiusInternal.textContent = state.insertRadiusInternal.toFixed(1) + " mm";
+
+            // Aggiornamento Proprietà Materiali nei display
+            const matBeam = MATERIALS[state.beamMatKey];
+            const matInsert = MATERIALS[state.insertMatKey];
+            const porosityFactor = 1 - (state.porosity / 100);
+            const effectiveYieldInsert = matInsert.yield * porosityFactor;
+            const effectiveTensileInsert = matInsert.tensile * porosityFactor; 
+
+            if(ui.displays.dispYieldBeam) ui.displays.dispYieldBeam.textContent = matBeam.yield;
+            if(ui.displays.dispTensileBeam) ui.displays.dispTensileBeam.textContent = matBeam.tensile; 
+            if(ui.displays.dispYieldInsert) ui.displays.dispYieldInsert.textContent = effectiveYieldInsert.toFixed(0);
+            if(ui.displays.dispTensileInsert) ui.displays.dispTensileInsert.textContent = effectiveTensileInsert.toFixed(0);
+
+            updateSectionPreview();
 
             try {
-                const mat = MATERIALS_V4[state.material];
-                if (!mat) {
-                    log('Errore: Materiale non trovato', 'error');
-                    return;
-                }
-
-                // Create section with holes
-                const section = new BeamSection({
-                    width: state.width / 1000,  // Convert to meters
-                    height: state.height / 1000,
-                    t_v: state.t_v / 1000,
-                    t_h: state.t_h / 1000,
-                    hasHoles: true,
-                    holeCount: state.bolts,
-                    fastenerType: state.fastenerType,
-                    holePosition: state.holePosition
-                });
-
-                log(`Sezione creata: ${state.width}x${state.height}mm, ${state.bolts} fori ${state.fastenerType}`);
-
-                // Get thermal factors
-                const alloyType = ThermalReductionFactors.getAlloyType(mat.name);
-                const kE = ThermalReductionFactors.getE_factor(state.temperature);
-                const kY = ThermalReductionFactors.getYield_factor(state.temperature, alloyType);
-
-                log(`Tipo lega: ${alloyType}, k_E=${kE.toFixed(3)}, k_yield=${kY.toFixed(3)}`);
-
-                // Display section results
-                document.getElementById('res-area').textContent = (section.A * 1e6).toFixed(1);
-                document.getElementById('res-area-net').textContent = (section.A_net * 1e6).toFixed(1);
-                document.getElementById('res-inertia').textContent = (section.I * 1e12).toFixed(0);
-                document.getElementById('res-inertia-net').textContent = (section.I_net * 1e12).toFixed(0);
-                
-                const inertiaReduction = ((section.I - section.I_net) / section.I * 100);
-                document.getElementById('res-inertia-reduction').textContent = inertiaReduction.toFixed(2) + '%';
-                document.getElementById('res-kt').textContent = section.Kt.toFixed(3);
-                document.getElementById('res-section-modulus').textContent = (section.S * 1e9).toFixed(0);
-                document.getElementById('res-alloy-type').textContent = alloyType;
-
-                // Display thermal results
-                document.getElementById('res-kE').textContent = kE.toFixed(3);
-                document.getElementById('res-kY').textContent = kY.toFixed(3);
-                document.getElementById('res-E-eff').textContent = (mat.E * kE).toFixed(1);
-                document.getElementById('res-yield-eff').textContent = (mat.yield * kY).toFixed(0);
-
-                // Bolted connection check
-                const connectionCheck = new BoltedConnectionCheck(
-                    state.fastenerType,
-                    state.boltGrade,
-                    state.bolts,
-                    mat
-                );
-
-                const t_plate = state.t_v / 1000;  // Use vertical wall thickness
-                const checkResult = connectionCheck.checkConnection(state.force, t_plate);
-
-                log(`Verifica connessione: F_app=${state.force}N, F_Rd=${(checkResult.totalResistance/1000).toFixed(1)}kN`);
-
-                // Display connection results
-                document.getElementById('res-shear').textContent = (checkResult.shearResistance / 1000).toFixed(2);
-                document.getElementById('res-bearing').textContent = (checkResult.bearingResistance / 1000).toFixed(2);
-                document.getElementById('res-total').textContent = (checkResult.totalResistance / 1000).toFixed(2);
-                document.getElementById('res-failure-mode').textContent = checkResult.failureMode === 'shear' ? 'Taglio' : 'Rifollamento';
-                
-                const utilizationPct = (checkResult.utilization * 100);
-                document.getElementById('res-utilization').textContent = utilizationPct.toFixed(1) + '%';
-                
-                // Update sidebar connection info
-                document.getElementById('res-connection-resistance').textContent = (checkResult.totalResistance / 1000).toFixed(1) + ' kN';
-                document.getElementById('res-connection-utilization').textContent = utilizationPct.toFixed(0) + '%';
-                
-                // Update utilization bar
-                const fillEl = document.getElementById('utilization-fill');
-                fillEl.style.width = Math.min(100, utilizationPct) + '%';
-                
-                if (checkResult.isOk) {
-                    fillEl.className = 'h-full transition-all duration-300 ' + 
-                        (utilizationPct < 50 ? 'bg-green-500' : utilizationPct < 80 ? 'bg-yellow-500' : 'bg-orange-500');
-                    document.getElementById('badge-connection-status').className = 'mt-1 text-center px-2 py-1 rounded text-[9px] font-bold bg-green-100 text-green-700';
-                    document.getElementById('badge-connection-status').textContent = 'OK';
-                    log(`✓ Connessione verificata (${utilizationPct.toFixed(0)}%)`, 'success');
-                } else {
-                    fillEl.className = 'h-full bg-red-500 transition-all duration-300';
-                    document.getElementById('badge-connection-status').className = 'mt-1 text-center px-2 py-1 rounded text-[9px] font-bold bg-red-100 text-red-700';
-                    document.getElementById('badge-connection-status').textContent = 'NON OK';
-                    log(`✗ Connessione NON verificata (${utilizationPct.toFixed(0)}%)`, 'error');
-                }
-
-                // Update status badge
-                updateStatusBadge(utilizationPct);
-
-                // Draw section visualization
-                drawSection(section);
-                drawSectionPreview(section);
-
-                log('Analisi completata', 'success');
-
-            } catch (error) {
-                log(`Errore: ${error.message}`, 'error');
-                console.error(error);
+                const physics = solveBeamSystem();
+                drawSystem(physics);
+            } catch (e) {
+                console.error("FEM Error:", e);
+                if (ui.displays.resDeflection) ui.displays.resDeflection.textContent = "ERR"; 
             }
         }
 
-        // ==================== UPDATE STATE FROM UI ====================
-        function updateStateFromUI() {
-            state.material = safeStr(ui.inputs.material, '6060-T6');
-            state.temperature = safeInt(ui.inputs.temperature, 20);
-            state.width = safeNum(ui.inputs.width, 100);
-            state.height = safeNum(ui.inputs.height, 50);
-            state.t_v = safeNum(ui.inputs.tv, 3);
-            state.t_h = safeNum(ui.inputs.th, 3);
-            state.bolts = safeInt(ui.inputs.bolts, 4);
-            state.fastenerType = safeStr(ui.inputs.fastenerType, 'M6');
-            state.boltGrade = safeStr(ui.inputs.boltGrade, '8.8');
-            state.holePosition = safeStr(ui.inputs.holePosition, 'vertical');
-            state.force = safeNum(ui.inputs.force, 5000);
+        function drawSystem(physics) {
+            const { nodes, residualNodes, momentBeam, momentWall, stressBeam, stressInsert, tipNode, residualTipNode, distWall_m, penetration_m, pulleyPos, forces, I_beam_val, I_insert_val, beamWeightPerMeter, finalBeamLimit, finalInsertLimit, finalBeamTensile, finalInsertTensile } = physics;
+            const pxPerM = CONSTANTS.pixelsPerMeter;
+            const startX = CONSTANTS.startX;
+            const startY = CONSTANTS.groundY;
+
+            Object.values(ui.svgLayers).forEach(l => { if(l && l.id !== 'ghost-beam') l.innerHTML = ''; });
+
+            // Disegno Assi e Muro
+            const axisLayer = ui.svgLayers.axis;
+            if(axisLayer) {
+                axisLayer.appendChild(createSVG('line', { x1: startX, y1: startY, x2: startX + 60, y2: startY, stroke: '#dc2626', 'stroke-width': 2, 'marker-end': 'url(#arrowhead-red)' }));
+                axisLayer.appendChild(createSVG('text', { x: startX + 65, y: startY + 4, fill: '#dc2626', 'font-size': '12', 'font-weight': 'bold', textContent: 'X' }));
+                axisLayer.appendChild(createSVG('line', { x1: startX, y1: startY, x2: startX, y2: startY + 60, stroke: '#16a34a', 'stroke-width': 2, 'marker-end': 'url(#arrowhead-green)' }));
+                axisLayer.appendChild(createSVG('text', { x: startX - 5, y: startY + 70, fill: '#16a34a', 'font-size': '12', 'font-weight': 'bold', textContent: 'Y' }));
+            }
+
+            const wall = createSVG('rect', { x: startX - 20, y: startY - 120, width: 20, height: 240, fill: '#334155', stroke: '#1e293b' });
+            if (ui.svgLayers.support) ui.svgLayers.support.appendChild(wall);
+
+            let visualHeightBeam = (state.customProfile ? state.customProfile.height_mm / 1000 : state.height/100) * pxPerM;
+            const strokeBeam = Math.max(4, visualHeightBeam);
+            const strokeInsert = Math.max(2, visualHeightBeam); // Usa stessa scala per semplicità visiva
+
+            // Funzione di mappatura Y (Corretta per evitare NaN)
+            const mapY = (val) => {
+                if (isNaN(val)) return startY;
+                // Nel solver stabile di Trave_4, Y aumenta positivamente verso il basso, 
+                // quindi startY + val è corretto.
+                return startY + (val * pxPerM * state.scaleFactor); 
+            };
+
+            // Disegno Deformazione Residua
+            if (residualNodes && residualNodes.length > 0 && ui.svgLayers.residual) {
+                let pathD = `M ${startX} ${startY} `;
+                for(let i=1; i<residualNodes.length; i++) {
+                    const nx = startX + residualNodes[i].x * pxPerM;
+                    const ny = mapY(residualNodes[i].y);
+                    if (!isNaN(nx) && !isNaN(ny)) pathD += `L ${nx} ${ny} `;
+                }
+                const resPath = createSVG('path', { d: pathD, fill: 'none', stroke: '#ea580c', 'stroke-width': 2, 'stroke-dasharray': '5,5' });
+                ui.svgLayers.residual.appendChild(resPath);
+            }
+
+            // Disegno Trave Deformata
+            for(let i=0; i<nodes.length-1; i++) {
+                const n1 = nodes[i]; const n2 = nodes[i+1];
+                const x1 = startX + n1.x * pxPerM;
+                const y1 = mapY(n1.y); 
+                const x2 = startX + n2.x * pxPerM;
+                const y2 = mapY(n2.y); 
+                const currentS = (n1.s + n2.s)/2;
+                
+                if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue;
+
+                if (currentS < distWall_m) {
+                    const line = createSVG('line', { x1, y1, x2, y2, stroke: "#525252", 'stroke-width': strokeInsert });
+                    if (ui.svgLayers.insertExposed) ui.svgLayers.insertExposed.appendChild(line);
+                } else if (currentS < distWall_m + penetration_m) {
+                    const lineBeam = createSVG('line', { x1, y1, x2, y2, stroke: "#ef4444", 'stroke-width': strokeBeam });
+                    if (ui.svgLayers.beam) ui.svgLayers.beam.appendChild(lineBeam);
+                } else {
+                    const ratio = Math.min(1, Math.abs(n1.moment) / (momentBeam || 1));
+                    const r = Math.floor(255 * ratio);
+                    const b = Math.floor(255 * (1 - ratio));
+                    const line = createSVG('line', { x1, y1, x2, y2, stroke: `rgb(${r}, 50, ${b})`, 'stroke-width': strokeBeam });
+                    if (ui.svgLayers.beam) ui.svgLayers.beam.appendChild(line);
+                }
+            }
             
-            // Update displayed values
-            if (ui.values.temp) ui.values.temp.textContent = state.temperature;
-            if (ui.values.width) ui.values.width.textContent = state.width;
-            if (ui.values.height) ui.values.height.textContent = state.height;
-            if (ui.values.tv) ui.values.tv.textContent = state.t_v.toFixed(1);
-            if (ui.values.th) ui.values.th.textContent = state.t_h.toFixed(1);
-            if (ui.values.bolts) ui.values.bolts.textContent = state.bolts;
-            if (ui.values.force) ui.values.force.textContent = state.force;
+            const tipX = startX + tipNode.x * pxPerM;
+            const tipY = mapY(tipNode.y); 
+
+            if (state.mode === 'mass') {
+                const ropeLen = 60;
+                const boxSize = 30 + (state.mass/10);
+                if (ui.svgLayers.mass) {
+                    ui.svgLayers.mass.appendChild(createSVG('line', { x1: tipX, y1: tipY, x2: tipX, y2: tipY + ropeLen, stroke: '#475569', 'stroke-width': 2 }));
+                    ui.svgLayers.mass.appendChild(createSVG('rect', { x: tipX - boxSize/2, y: tipY + ropeLen, width: boxSize, height: boxSize, fill: '#ef4444', stroke: '#b91c1c', rx: 4 }));
+                    const txt = createSVG('text', { x: tipX, y: tipY + ropeLen + boxSize/2 + 5, 'text-anchor': 'middle', fill: 'white', 'font-size': 10, 'font-weight': 'bold' });
+                    txt.textContent = state.mass + 'kg';
+                    ui.svgLayers.mass.appendChild(txt);
+                }
+            } else {
+                // Logica Carrucola (Corretta e ripristinata esattamente come in Trave_4)
+                const pX = startX + pulleyPos.x * pxPerM;
+                const renderPulleyY = startY + (state.pulleyY * pxPerM); 
+
+                if (ui.svgLayers.pulley) {
+                    // Cavo viola tratteggiato
+                    ui.svgLayers.pulley.appendChild(createSVG('line', { x1: tipX, y1: tipY, x2: pX, y2: renderPulleyY, stroke: '#9333ea', 'stroke-width': 2, 'stroke-dasharray': '4,2' }));
+                    // Ruota carrucola
+                    ui.svgLayers.pulley.appendChild(createSVG('circle', { cx: pX, cy: renderPulleyY, r: 15, fill: '#ddd', stroke: '#666', 'stroke-width': 2 }));
+                    // Supporto carrucola
+                    ui.svgLayers.pulley.appendChild(createSVG('line', { x1: pX, y1: renderPulleyY, x2: pX, y2: renderPulleyY - 50, stroke: '#333', 'stroke-width': 3 }));
+                }
+
+                if (ui.svgLayers.annotations) {
+                    // Vettore forza risultante
+                    const forceAngle = Math.atan2(renderPulleyY - tipY, pX - tipX);
+                    const fx = tipX + 50 * Math.cos(forceAngle);
+                    const fy = tipY + 50 * Math.sin(forceAngle);
+                    ui.svgLayers.annotations.appendChild(createSVG('line', { x1: tipX, y1: tipY, x2: fx, y2: fy, stroke: '#9333ea', 'stroke-width': 3, 'marker-end': 'url(#arrowhead-purple)' }));
+                    const txtFc = createSVG('text', { x: tipX + 15, y: tipY - 15, fill: '#9333ea', 'font-size': 11, 'font-weight': 'bold' });
+                    txtFc.textContent = `Fc = ${state.pulleyForce} N`;
+                    ui.svgLayers.annotations.appendChild(txtFc);
+                }
+            }
+
+            // --- AGGIORNAMENTO RISULTATI UI ---
+            const matInsert = MATERIALS[state.insertMatKey];
+            const matBeam = MATERIALS[state.beamMatKey];
+            const beamStressMPa = stressBeam / 1e6;
+            const insertStressMPa = stressInsert / 1e6;
+            
+            if (ui.displays.resBeamStress) {
+                ui.displays.resBeamStress.textContent = beamStressMPa.toFixed(1);
+                if (ui.displays.resLimitBeamYield) ui.displays.resLimitBeamYield.textContent = finalBeamLimit.toFixed(0); // Usa il limite termico
+                if (ui.displays.resLimitBeamTensile) ui.displays.resLimitBeamTensile.textContent = finalBeamTensile.toFixed(0); // Usa il limite termico
+                updateBadge(ui.displays.badgeBeam, beamStressMPa, finalBeamLimit, finalBeamTensile, ui.displays.resBeamStress);
+            }
+
+            if (ui.displays.resInsertStress) {
+                ui.displays.resInsertStress.textContent = insertStressMPa.toFixed(1);
+                if (ui.displays.resLimitInsertYield) ui.displays.resLimitInsertYield.textContent = finalInsertLimit.toFixed(0); // Usa il limite termico
+                if (ui.displays.resLimitInsertTensile) ui.displays.resLimitInsertTensile.textContent = finalInsertTensile.toFixed(0); // Usa il limite termico
+                updateBadge(ui.displays.badgeInsert, insertStressMPa, finalInsertLimit, finalInsertTensile, ui.displays.resInsertStress);
+            }
+
+            // Deflessione (Y è positivo verso il basso nel canvas, mostriamo valore assoluto)
+            const defMm = (tipNode.y * 1000);
+            if (ui.displays.resDeflection) ui.displays.resDeflection.textContent = defMm.toFixed(1); 
+            
+            const resDefMm = (residualTipNode.y * 1000);
+            if (ui.displays.resDeflectionResidual) {
+                const resDefPercent = (Math.abs(residualTipNode.y) / state.length) * 100;
+                ui.displays.resDeflectionResidual.textContent = `${resDefMm.toFixed(1)} mm (${resDefPercent.toFixed(2)}%)`;
+            }
+
+            if (ui.displays.resIBeam) ui.displays.resIBeam.textContent = (I_beam_val * 1e8).toFixed(1);
+            if (ui.displays.resIInsert) ui.displays.resIInsert.textContent = (I_insert_val * 1e8).toFixed(1);
+            if (ui.displays.resWeightBeam) ui.displays.resWeightBeam.textContent = beamWeightPerMeter.toFixed(2);
         }
 
-        // ==================== EVENT LISTENERS ====================
-        // Material and temperature
-        ui.inputs.material.addEventListener('change', () => {
-            updateStateFromUI();
-            updateMaterialInfo();
-        });
-        ui.inputs.temperature.addEventListener('input', () => {
-            updateStateFromUI();
-            updateMaterialInfo();
-        });
+        // --- Event Listeners ---
+        if (ui.inputs.fileSvg) ui.inputs.fileSvg.addEventListener('change', (e) => handleFileUpload(e, 'beam'));
+        if (ui.inputs.fileSvgInsert) ui.inputs.fileSvgInsert.addEventListener('change', (e) => handleFileUpload(e, 'insert'));
+        if (ui.controls.btnClearSvg) ui.controls.btnClearSvg.addEventListener('click', () => clearProfile('beam'));
+        if (ui.controls.btnClearSvgInsert) ui.controls.btnClearSvgInsert.addEventListener('click', () => clearProfile('insert'));
+        if (ui.controls.btnPreviewBeam) ui.controls.btnPreviewBeam.addEventListener('click', () => setPreviewMode('beam'));
+        if (ui.controls.btnPreviewInsert) ui.controls.btnPreviewInsert.addEventListener('click', () => setPreviewMode('insert'));
+        if (ui.controls.btnMass) ui.controls.btnMass.addEventListener('click', () => setMode('mass'));
+        if (ui.controls.btnPulley) ui.controls.btnPulley.addEventListener('click', () => setMode('pulley'));
 
-        // Geometry sliders
-        ui.inputs.width.addEventListener('input', updateStateFromUI);
-        ui.inputs.height.addEventListener('input', updateStateFromUI);
-        ui.inputs.tv.addEventListener('input', updateStateFromUI);
-        ui.inputs.th.addEventListener('input', updateStateFromUI);
-
-        // Fastener controls
-        ui.inputs.bolts.addEventListener('input', updateStateFromUI);
-        ui.inputs.fastenerType.addEventListener('change', () => {
-            updateStateFromUI();
-            updateBoltGradeVisibility();
-        });
-        ui.inputs.boltGrade.addEventListener('change', updateStateFromUI);
-        ui.inputs.holePosition.addEventListener('change', updateStateFromUI);
-
-        // Force
-        ui.inputs.force.addEventListener('input', updateStateFromUI);
-
-        // Calculate button
-        ui.btnCalculate.addEventListener('click', calculate);
-
-        // Log toggle - track state with a variable for reliable toggling
-        let logVisible = true;
-        document.getElementById('toggle-log').addEventListener('click', () => {
-            const logEl = document.getElementById('analysis-log');
-            const toggleBtn = document.getElementById('toggle-log');
-            logVisible = !logVisible;
-            logEl.style.display = logVisible ? 'block' : 'none';
-            toggleBtn.textContent = logVisible ? '▼' : '▲';
+        // Listener generico per tutti gli input tranne quelli speciali
+        const specialInputs = ['input-svg-beam', 'input-svg-insert', 'btn-clear-svg-beam', 'btn-clear-svg-insert'];
+        Object.values(ui.inputs).forEach(el => {
+            if (el && !specialInputs.includes(el.id)) {
+                el.addEventListener(el.type === 'range' || el.type === 'text' ? 'input' : 'change', update);
+            }
         });
 
-        // ==================== INITIALIZATION ====================
-        updateStateFromUI();
-        updateMaterialInfo();
-        updateBoltGradeVisibility();
-        log('Sistema inizializzato. Premi "Calcola Analisi FEM" per avviare.', 'info');
+        // Grid Init
+        const grid = ui.svgLayers.grid;
+        if (grid) {
+            let d = "";
+            for(let x=0; x<CONSTANTS.svgWidth; x+=50) d += `M${x} 0 V${CONSTANTS.svgHeight} `;
+            for(let y=0; y<CONSTANTS.svgHeight; y+=50) d += `M0 ${y} H${CONSTANTS.svgWidth} `;
+            grid.appendChild(createSVG('path', { d, stroke: '#f1f5f9' }));
+        }
+
+        // Avvio
+        update();
+
     </script>
+    <!-- MOTORE FEM v2.0 - Aggiunge funzionalità avanzate senza conflitti -->
+    <script src="fem_engine_v4.js"></script>
 </body>
 </html>
