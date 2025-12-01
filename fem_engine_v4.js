@@ -72,7 +72,7 @@ const FEM_V4_CONFIG = {
 const MATERIALS_V4 = {
     '6060-T4': {
         // Base
-        E: 68. 0, G: 25.6, nu: 0.33, density: 2700, alpha: 23.1e-6,
+        E: 68.0, G: 25.6, nu: 0.33, density: 2700, alpha: 23.1e-6,
         // Snervamento/Rottura
         yield: 65, tensile: 130, compressive: 65, shearYield: 38,
         // Ramberg-Osgood
@@ -80,13 +80,13 @@ const MATERIALS_V4 = {
         // Plasticità avanzata (Chaboche)
         Q_inf: 45, b_iso: 8, C_kin: 12000, gamma_kin: 80,
         // Danno (Lemaitre)
-        S_damage: 2. 5, s_damage: 1.0, epsilon_D: 0.02,
+        S_damage: 2.5, s_damage: 1.0, epsilon_D: 0.02,
         // Fatica
         fatigue_Sf: 95, fatigue_b: -0.085, fatigue_c: -0.58, fatigue_ef: 0.25,
         // Creep (Norton-Bailey-Arrhenius)
         creep_A: 1.2e-12, creep_n: 3.5, creep_Q: 142000,
         // Frattura
-        K_Ic: 24, J_Ic: 8. 5,
+        K_Ic: 24, J_Ic: 8.5,
         // Termico
         Cp: 900, k_thermal: 200, T_melt: 585, T_recryst: 340,
         name: "6060 T4"
@@ -104,11 +104,11 @@ const MATERIALS_V4 = {
         name: "6060 T6"
     },
     '6061-T6': {
-        E: 70.0, G: 26. 3, nu: 0.33, density: 2700, alpha: 23.6e-6,
+        E: 70.0, G: 26.3, nu: 0.33, density: 2700, alpha: 23.6e-6,
         yield: 240, tensile: 290, compressive: 240, shearYield: 140,
         n_RO: 20, K_RO: 380,
         Q_inf: 75, b_iso: 12, C_kin: 20000, gamma_kin: 120,
-        S_damage: 4.0, s_damage: 1. 1, epsilon_D: 0.035,
+        S_damage: 4.0, s_damage: 1.1, epsilon_D: 0.035,
         fatigue_Sf: 210, fatigue_b: -0.077, fatigue_c: -0.52, fatigue_ef: 0.20,
         creep_A: 5e-13, creep_n: 4.0, creep_Q: 150000,
         K_Ic: 29, J_Ic: 12,
@@ -120,7 +120,7 @@ const MATERIALS_V4 = {
         yield: 260, tensile: 310, compressive: 260, shearYield: 150,
         n_RO: 18, K_RO: 410,
         Q_inf: 80, b_iso: 14, C_kin: 22000, gamma_kin: 130,
-        S_damage: 4.5, s_damage: 1. 1, epsilon_D: 0.04,
+        S_damage: 4.5, s_damage: 1.1, epsilon_D: 0.04,
         fatigue_Sf: 230, fatigue_b: -0.075, fatigue_c: -0.50, fatigue_ef: 0.18,
         creep_A: 4e-13, creep_n: 4.2, creep_Q: 152000,
         K_Ic: 30, J_Ic: 13,
@@ -132,7 +132,7 @@ const MATERIALS_V4 = {
         yield: 505, tensile: 570, compressive: 505, shearYield: 290,
         n_RO: 12, K_RO: 680,
         Q_inf: 120, b_iso: 18, C_kin: 35000, gamma_kin: 180,
-        S_damage: 6.0, s_damage: 1. 2, epsilon_D: 0.06,
+        S_damage: 6.0, s_damage: 1.2, epsilon_D: 0.06,
         fatigue_Sf: 400, fatigue_b: -0.065, fatigue_c: -0.45, fatigue_ef: 0.12,
         creep_A: 2e-13, creep_n: 4.5, creep_Q: 160000,
         K_Ic: 24, J_Ic: 8,
@@ -144,7 +144,7 @@ const MATERIALS_V4 = {
         yield: 345, tensile: 480, compressive: 345, shearYield: 200,
         n_RO: 10, K_RO: 580,
         Q_inf: 100, b_iso: 15, C_kin: 28000, gamma_kin: 150,
-        S_damage: 5.0, s_damage: 1. 15, epsilon_D: 0.05,
+        S_damage: 5.0, s_damage: 1.15, epsilon_D: 0.05,
         fatigue_Sf: 350, fatigue_b: -0.07, fatigue_c: -0.48, fatigue_ef: 0.15,
         creep_A: 3e-13, creep_n: 4.3, creep_Q: 155000,
         K_Ic: 26, J_Ic: 9,
@@ -156,7 +156,7 @@ const MATERIALS_V4 = {
         yield: 140, tensile: 240, compressive: 140, shearYield: 80,
         n_RO: 15, K_RO: 320,
         Q_inf: 50, b_iso: 8, C_kin: 12000, gamma_kin: 90,
-        S_damage: 2.8, s_damage: 0.95, epsilon_D: 0. 02,
+        S_damage: 2.8, s_damage: 0.95, epsilon_D: 0.02,
         fatigue_Sf: 120, fatigue_b: -0.09, fatigue_c: -0.60, fatigue_ef: 0.28,
         creep_A: 2e-12, creep_n: 3.2, creep_Q: 135000,
         K_Ic: 18, J_Ic: 5,
@@ -168,8 +168,8 @@ const MATERIALS_V4 = {
         yield: 140, tensile: 240, compressive: 140, shearYield: 80,
         n_RO: 15, K_RO: 320,
         Q_inf: 50, b_iso: 8, C_kin: 12000, gamma_kin: 90,
-        S_damage: 2.8, s_damage: 0. 95, epsilon_D: 0.02,
-        fatigue_Sf: 120, fatigue_b: -0. 09, fatigue_c: -0. 60, fatigue_ef: 0. 28,
+        S_damage: 2.8, s_damage: 0.95, epsilon_D: 0.02,
+        fatigue_Sf: 120, fatigue_b: -0.09, fatigue_c: -0.60, fatigue_ef: 0.28,
         creep_A: 2e-12, creep_n: 3.2, creep_Q: 135000,
         K_Ic: 18, J_Ic: 5,
         Cp: 963, k_thermal: 150, T_melt: 580, T_recryst: 320,
@@ -180,10 +180,10 @@ const MATERIALS_V4 = {
         yield: 150, tensile: 260, compressive: 150, shearYield: 87,
         n_RO: 14, K_RO: 340,
         Q_inf: 55, b_iso: 9, C_kin: 14000, gamma_kin: 95,
-        S_damage: 3. 0, s_damage: 1.0, epsilon_D: 0.025,
+        S_damage: 3.0, s_damage: 1.0, epsilon_D: 0.025,
         fatigue_Sf: 130, fatigue_b: -0.088, fatigue_c: -0.58, fatigue_ef: 0.26,
         creep_A: 1.8e-12, creep_n: 3.3, creep_Q: 138000,
-        K_Ic: 19, J_Ic: 5. 5,
+        K_Ic: 19, J_Ic: 5.5,
         Cp: 963, k_thermal: 155, T_melt: 575, T_recryst: 315,
         name: "EN AB 47100"
     },
@@ -192,7 +192,7 @@ const MATERIALS_V4 = {
         yield: 370, tensile: 400, compressive: 370, shearYield: 215,
         n_RO: 8, K_RO: 500,
         Q_inf: 90, b_iso: 12, C_kin: 25000, gamma_kin: 140,
-        S_damage: 4.0, s_damage: 1. 0, epsilon_D: 0.03,
+        S_damage: 4.0, s_damage: 1.0, epsilon_D: 0.03,
         fatigue_Sf: 280, fatigue_b: -0.072, fatigue_c: -0.50, fatigue_ef: 0.18,
         creep_A: 1e-12, creep_n: 3.8, creep_Q: 145000,
         K_Ic: 32, J_Ic: 14,
@@ -228,7 +228,7 @@ const MATERIALS_V4 = {
         yield: 500, tensile: 570, compressive: 500, shearYield: 290,
         n_RO: 12, K_RO: 680,
         Q_inf: 120, b_iso: 18, C_kin: 35000, gamma_kin: 180,
-        S_damage: 6.0, s_damage: 1. 2, epsilon_D: 0.06,
+        S_damage: 6.0, s_damage: 1.2, epsilon_D: 0.06,
         fatigue_Sf: 395, fatigue_b: -0.066, fatigue_c: -0.46, fatigue_ef: 0.13,
         creep_A: 2e-13, creep_n: 4.5, creep_Q: 160000,
         K_Ic: 24, J_Ic: 8,
@@ -252,8 +252,8 @@ const MATERIALS_V4 = {
         yield: 110, tensile: 205, compressive: 110, shearYield: 64,
         n_RO: 22, K_RO: 280,
         Q_inf: 55, b_iso: 9, C_kin: 14000, gamma_kin: 95,
-        S_damage: 2.8, s_damage: 0.95, epsilon_D: 0. 022,
-        fatigue_Sf: 150, fatigue_b: -0. 082, fatigue_c: -0.56, fatigue_ef: 0.24,
+        S_damage: 2.8, s_damage: 0.95, epsilon_D: 0.022,
+        fatigue_Sf: 150, fatigue_b: -0.082, fatigue_c: -0.56, fatigue_ef: 0.24,
         creep_A: 9e-13, creep_n: 3.6, creep_Q: 144000,
         K_Ic: 28, J_Ic: 11,
         Cp: 896, k_thermal: 167, T_melt: 582, T_recryst: 340,
@@ -266,7 +266,7 @@ const MATERIALS_V4 = {
 // ============================================================================
 const PHYSICS_V4 = {
     g: 9.80665,
-    R_gas: 8. 314,
+    R_gas: 8.314,
     airDensity: 1.225,
     stefan_boltzmann: 5.670374419e-8,
     kelvin_offset: 273.15,
@@ -1118,7 +1118,7 @@ class ChabochePlasticity {
     update(epsilon_total, temperature = 20) {
         // Temperature correction
         const T_factor = 1 - 0.0015 * Math.max(0, temperature - 20);
-        const sigma_y_T = this.sigma_y0 * Math.max(0. 5, T_factor);
+        const sigma_y_T = this.sigma_y0 * Math.max(0.5, T_factor);
         const E_T = this. E * (1 - 0.0004 * Math.max(0, temperature - 20));
         
         // Trial stress
@@ -1382,7 +1382,7 @@ class CorotationalBeamElement {
         const kappa2 = (4 * u_local[2] + 2 * u_local[5] - 6 * (u_local[4] - u_local[1]) / L) / L;
         
         // Gauss points
-        const gaussPoints = [-0.577350269, 0. 577350269];
+        const gaussPoints = [-0.577350269, 0.577350269];
         const gaussWeights = [1, 1];
         
         let N_int = 0, M_int = 0;
@@ -1467,7 +1467,7 @@ class BeamSection {
         this.t_h = params.t_h;       // Horizontal wall thickness (m)
         this.fillet = params.fillet || 0;
         this.ledGroove = params.ledGroove || false;
-        this. grooveW = params.grooveW || 0. 012;
+        this. grooveW = params.grooveW || 0.012;
         this. grooveH = params.grooveH || 0.008;
         
         this.calculate();
@@ -2081,4 +2081,29 @@ class DynamicAnalysis {
         for (let i = 0; i < n; i += 3) {
             // Vertical DOF contribution
             const Mi = M.get(i + 1, i + 1);
-            sum_phi_M += phi[i + 1] *
+            sum_phi_M += phi[i + 1] * Mi;
+            sum_M += Mi;
+        }
+        
+        return sum_M > 0 ? Math.pow(sum_phi_M, 2) / sum_M : 0;
+    }
+}
+
+// ============================================================================
+// ESPORTAZIONE GLOBALE (per uso in browser)
+// ============================================================================
+if (typeof window !== 'undefined') {
+    window.HoleStressAnalysis = HoleStressAnalysis;
+    window.NetSectionAnalysis = NetSectionAnalysis;
+    window.BearingAnalysis = BearingAnalysis;
+    window.FatigueNotchAnalysis = FatigueNotchAnalysis;
+    window.AdvancedHoleFEM = AdvancedHoleFEM;
+    window.BeamSection = BeamSection;
+    window.BeamSectionWithHoles = BeamSectionWithHoles;
+    window.MATERIALS_V4 = MATERIALS_V4;
+    window.EC9_CONSTANTS = EC9_CONSTANTS;
+    window.HOLE_ANALYSIS_CONSTANTS = HOLE_ANALYSIS_CONSTANTS;
+    window.NOTCH_CONSTANTS = NOTCH_CONSTANTS;
+    window.calculateKt = calculateKt;
+    window.calculateHoleReduction = calculateHoleReduction;
+}
