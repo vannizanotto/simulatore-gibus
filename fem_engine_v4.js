@@ -1393,8 +1393,8 @@ class DynamicAnalysis {
         let sum_phi_M = 0;
         let sum_M = 0;
         
-        for (let i = 0; i < n; i += 3) {
-            // Vertical DOF contribution
+        for (let i = 0; i < n - 2; i += 3) {
+            // Vertical DOF contribution (index i+1 must be valid)
             const Mi = M.get(i + 1, i + 1);
             sum_phi_M += phi[i + 1] * Mi;
             sum_M += Mi;
