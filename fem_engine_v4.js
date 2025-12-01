@@ -952,7 +952,9 @@ class BeamSectionWithHoles extends BeamSection {
         this.areaReduction = holeArea_m2 * n;
         
         // Limite riduzione al 30% della parete superiore per evitare calcoli non fisici
-        const maxReduction = this.A * 0.3;
+        // (Standard ingegneristico: riduzione sezione > 30% richiede analisi più approfondita)
+        const MAX_AREA_REDUCTION_RATIO = 0.3;
+        const maxReduction = this.A * MAX_AREA_REDUCTION_RATIO;
         if (this.areaReduction > maxReduction) {
             this.areaReduction = maxReduction;
         }
@@ -1035,6 +1037,7 @@ function calculateHoleReduction(sectionParams, numHoles, holeDiameter_mm) {
 /**
  * Calcola il fattore di concentrazione delle tensioni Kt per foro in piastra
  * Formula: Kt = 3.0 - 3.14×(d/W) + 3.667×(d/W)² - 1.527×(d/W)³
+ * (Formula di Peterson per piastra forata in trazione)
  * @param {number} d_mm - Diametro foro in mm
  * @param {number} W_mm - Larghezza sezione in mm
  * @returns {number} - Fattore Kt (>=1.0)
@@ -1044,8 +1047,10 @@ function calculateKt(d_mm, W_mm) {
     
     const ratio = d_mm / W_mm;
     
-    // Limita il rapporto per evitare valori non fisici
-    if (ratio >= 0.5) return 3.0; // Valore massimo ragionevole
+    // Limite rapporto d/W per validità formula (d/W > 0.5 non è fisicamente realistico)
+    const MAX_RATIO = 0.5;
+    const MAX_KT = 3.0; // Valore massimo Kt per foro in piastra infinita
+    if (ratio >= MAX_RATIO) return MAX_KT;
     
     const Kt = 3.0 - 3.14 * ratio + 3.667 * Math.pow(ratio, 2) - 1.527 * Math.pow(ratio, 3);
     
