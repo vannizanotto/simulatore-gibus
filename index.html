@@ -461,6 +461,35 @@
                         <span id="val-area-reduction-insert" class="font-mono font-bold text-amber-900">0.00 mm²</span>
                     </div>
                 </div>
+
+                <!-- Display Analisi Avanzata Fori -->
+                <div class="bg-white p-2 rounded border border-amber-200 space-y-1 mt-2">
+                    <div class="text-[9px] font-bold text-amber-700 uppercase border-b border-amber-200 pb-1">Analisi Avanzata (EC9/Peterson)</div>
+                    <div class="grid grid-cols-2 gap-1 text-[8px]">
+                        <div class="bg-amber-50 p-1 rounded border border-amber-100">
+                            <span class="text-amber-600">Kt eff:</span>
+                            <span id="val-kt-effective" class="font-mono font-bold text-amber-900">1.00</span>
+                        </div>
+                        <div class="bg-amber-50 p-1 rounded border border-amber-100">
+                            <span class="text-amber-600">Kf fatica:</span>
+                            <span id="val-kf-fatigue" class="font-mono font-bold text-amber-900">1.00</span>
+                        </div>
+                        <div class="bg-amber-50 p-1 rounded border border-amber-100">
+                            <span class="text-amber-600">σ locale:</span>
+                            <span id="val-sigma-local" class="font-mono font-bold text-red-600">0</span>
+                            <span class="text-amber-500">MPa</span>
+                        </div>
+                        <div class="bg-amber-50 p-1 rounded border border-amber-100">
+                            <span class="text-amber-600">Bearing:</span>
+                            <span id="val-bearing-util" class="font-mono font-bold text-amber-900">0</span>
+                            <span class="text-amber-500">%</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-[8px] mt-1 pt-1 border-t border-amber-100">
+                        <span class="text-amber-600">SF Fatica:</span>
+                        <span id="val-fatigue-sf" class="font-mono font-bold text-green-700">∞</span>
+                    </div>
+                </div>
             </div>
 
             <hr class="border-neutral-200">
@@ -622,7 +651,7 @@
             numBolts: 3, beamMatKey: '6061-T6', insertMatKey: '46100-F', porosity: 0, scaleFactor: 1,
             customProfile: null, customInsertProfile: null, previewMode: 'beam', beamShape: 'rect', insertShape: 'solid',
             autoFit: true, filletRadius: 4.0, ledGroove: false, temperature: 20,
-            fastenerType: 'screw-m3', fastenerDiameter: 3.2
+            fastenerType: 'screw-m3', fastenerDiameter: 3.2, holeSpacing: 50
         };
 
         const CONSTANTS = { g: 9.81, startX: 50, groundY: 300, svgWidth: 900, svgHeight: 600, pixelsPerMeter: 180, densityAluminum: 2700 };
@@ -672,7 +701,9 @@
                 valInsertFlange: document.getElementById('val-insert-flange'), valInsertWeb: document.getElementById('val-insert-web'), valInsertWall: document.getElementById('val-insert-wall'), valInsertRib: document.getElementById('val-insert-rib'),
                 valInsertFlangeC: document.getElementById('val-insert-flange-c'), valInsertWebC: document.getElementById('val-insert-web-c'), valInsertWallC: document.getElementById('val-insert-wall-c'), valInsertRadiusInternal: document.getElementById('val-insert-radius-internal'),
                 valTemperature: document.getElementById('val-temperature'),
-                valFastenerDiameter: document.getElementById('val-fastener-diameter'), valAreaReductionBeam: document.getElementById('val-area-reduction-beam'), valAreaReductionInsert: document.getElementById('val-area-reduction-insert')
+                valFastenerDiameter: document.getElementById('val-fastener-diameter'), valAreaReductionBeam: document.getElementById('val-area-reduction-beam'), valAreaReductionInsert: document.getElementById('val-area-reduction-insert'),
+                valKtEffective: document.getElementById('val-kt-effective'), valKfFatigue: document.getElementById('val-kf-fatigue'), 
+                valSigmaLocal: document.getElementById('val-sigma-local'), valBearingUtil: document.getElementById('val-bearing-util'), valFatigueSf: document.getElementById('val-fatigue-sf')
             },
             svgLayers: {
                 grid: document.getElementById('grid-layer'), support: document.getElementById('support-layer'), residual: document.getElementById('residual-layer'),
@@ -1793,6 +1824,104 @@
             if(ui.displays.valAreaReductionBeam) ui.displays.valAreaReductionBeam.textContent = areaReductionBeam.toFixed(2) + " mm²";
             if(ui.displays.valAreaReductionInsert) ui.displays.valAreaReductionInsert.textContent = areaReductionInsert.toFixed(2) + " mm²";
 
+            // === ADVANCED HOLE ANALYSIS (EC9/Peterson) ===
+            // Calculate hole spacing based on penetration length and number of holes
+            const penetration_mm = state.penetration * 10; // cm -> mm
+            state.holeSpacing = state.numBolts > 1 ? penetration_mm / (state.numBolts - 1) : penetration_mm;
+            
+            // Use the advanced analysis classes from fem_engine_v4.js
+            if (typeof HoleStressAnalysis !== 'undefined' && state.fastenerType !== 'none') {
+                try {
+                    const W_mm = state.width * 10; // cm -> mm
+                    const t_mm = state.thicknessH; // mm
+                    
+                    // Create hole stress analysis
+                    const holeAnalysis = new HoleStressAnalysis({
+                        d: state.fastenerDiameter,
+                        p: state.holeSpacing,
+                        t: t_mm,
+                        W: W_mm,
+                        n: state.numBolts,
+                        material: state.beamMatKey
+                    });
+                    
+                    // Create fatigue notch analysis
+                    const Kt_eff = holeAnalysis.getEffectiveKt();
+                    const fatigueAnalysis = new FatigueNotchAnalysis(
+                        state.beamMatKey,
+                        Kt_eff,
+                        0.5  // Default notch radius
+                    );
+                    
+                    // Update displays
+                    if(ui.displays.valKtEffective) {
+                        ui.displays.valKtEffective.textContent = Kt_eff.toFixed(2);
+                        // Color coding for Kt
+                        if (Kt_eff > 2.5) ui.displays.valKtEffective.className = "font-mono font-bold text-red-600";
+                        else if (Kt_eff > 2.0) ui.displays.valKtEffective.className = "font-mono font-bold text-yellow-600";
+                        else ui.displays.valKtEffective.className = "font-mono font-bold text-amber-900";
+                    }
+                    
+                    const Kf = fatigueAnalysis.calculateKf();
+                    if(ui.displays.valKfFatigue) {
+                        ui.displays.valKfFatigue.textContent = Kf.toFixed(2);
+                        if (Kf > 2.0) ui.displays.valKfFatigue.className = "font-mono font-bold text-red-600";
+                        else if (Kf > 1.5) ui.displays.valKfFatigue.className = "font-mono font-bold text-yellow-600";
+                        else ui.displays.valKfFatigue.className = "font-mono font-bold text-amber-900";
+                    }
+                    
+                    // Calculate bearing resistance if available
+                    if (typeof BearingAnalysis !== 'undefined') {
+                        const matBeamData = MATERIALS_V4 ? MATERIALS_V4[state.beamMatKey] : MATERIALS[state.beamMatKey];
+                        if (matBeamData) {
+                            const bearingCheck = new BearingAnalysis(
+                                { diameter: state.fastenerDiameter, f_ub: 400 },
+                                { thickness: t_mm, e1: 15, p1: state.holeSpacing },
+                                matBeamData
+                            );
+                            
+                            // Estimate applied force per bolt (simplified: assume 10% of total force)
+                            const totalForce = state.mode === 'mass' ? state.mass * 9.81 : state.pulleyForce;
+                            const forcePerBolt = totalForce / state.numBolts;
+                            
+                            const bearingResult = bearingCheck.checkBearing(forcePerBolt);
+                            if(ui.displays.valBearingUtil) {
+                                const util = Math.min(999, bearingResult.utilizationPercent);
+                                ui.displays.valBearingUtil.textContent = util.toFixed(0);
+                                if (util > 100) ui.displays.valBearingUtil.className = "font-mono font-bold text-red-600";
+                                else if (util > 80) ui.displays.valBearingUtil.className = "font-mono font-bold text-yellow-600";
+                                else ui.displays.valBearingUtil.className = "font-mono font-bold text-amber-900";
+                            }
+                        }
+                    }
+                    
+                    // Calculate fatigue safety factor
+                    const fatigueResult = fatigueAnalysis.calculateFatigueSafetyFactor(10, 20); // Nominal stress estimates
+                    if(ui.displays.valFatigueSf) {
+                        const sf = fatigueResult.safetyFactor;
+                        if (sf === Infinity || sf > 100) {
+                            ui.displays.valFatigueSf.textContent = "∞";
+                            ui.displays.valFatigueSf.className = "font-mono font-bold text-green-700";
+                        } else {
+                            ui.displays.valFatigueSf.textContent = sf.toFixed(1);
+                            if (sf < 1.0) ui.displays.valFatigueSf.className = "font-mono font-bold text-red-600";
+                            else if (sf < 1.5) ui.displays.valFatigueSf.className = "font-mono font-bold text-yellow-600";
+                            else ui.displays.valFatigueSf.className = "font-mono font-bold text-green-700";
+                        }
+                    }
+                    
+                } catch(e) {
+                    console.log("Advanced analysis not available:", e);
+                }
+            } else {
+                // No fasteners - reset displays
+                if(ui.displays.valKtEffective) ui.displays.valKtEffective.textContent = "1.00";
+                if(ui.displays.valKfFatigue) ui.displays.valKfFatigue.textContent = "1.00";
+                if(ui.displays.valSigmaLocal) ui.displays.valSigmaLocal.textContent = "0";
+                if(ui.displays.valBearingUtil) ui.displays.valBearingUtil.textContent = "0";
+                if(ui.displays.valFatigueSf) ui.displays.valFatigueSf.textContent = "∞";
+            }
+
             // Aggiornamento display per pannelli avanzati
             if(ui.displays.valInsertFlange) ui.displays.valInsertFlange.textContent = state.insertFlangeT + " mm";
             if(ui.displays.valInsertWeb) ui.displays.valInsertWeb.textContent = state.insertWebT + " mm";
@@ -1953,6 +2082,37 @@
                 if (ui.displays.resLimitInsertYield) ui.displays.resLimitInsertYield.textContent = finalInsertLimit.toFixed(0); // Usa il limite termico
                 if (ui.displays.resLimitInsertTensile) ui.displays.resLimitInsertTensile.textContent = finalInsertTensile.toFixed(0); // Usa il limite termico
                 updateBadge(ui.displays.badgeInsert, insertStressMPa, finalInsertLimit, finalInsertTensile, ui.displays.resInsertStress);
+            }
+
+            // Update local stress with Kt (advanced analysis)
+            if (ui.displays.valSigmaLocal && typeof HoleStressAnalysis !== 'undefined' && state.fastenerType !== 'none') {
+                try {
+                    const W_mm = state.width * 10;
+                    const holeAnalysis = new HoleStressAnalysis({
+                        d: state.fastenerDiameter,
+                        p: state.holeSpacing,
+                        t: state.thicknessH,
+                        W: W_mm,
+                        n: state.numBolts,
+                        material: state.beamMatKey
+                    });
+                    const sigmaLocal = holeAnalysis.getMaxLocalStress(beamStressMPa);
+                    ui.displays.valSigmaLocal.textContent = sigmaLocal.toFixed(1);
+                    
+                    // Color coding based on yield limit
+                    if (sigmaLocal > finalBeamLimit) {
+                        ui.displays.valSigmaLocal.className = "font-mono font-bold text-red-600";
+                    } else if (sigmaLocal > finalBeamLimit * 0.8) {
+                        ui.displays.valSigmaLocal.className = "font-mono font-bold text-yellow-600";
+                    } else {
+                        ui.displays.valSigmaLocal.className = "font-mono font-bold text-green-600";
+                    }
+                } catch(e) {
+                    ui.displays.valSigmaLocal.textContent = beamStressMPa.toFixed(1);
+                }
+            } else if (ui.displays.valSigmaLocal) {
+                ui.displays.valSigmaLocal.textContent = beamStressMPa.toFixed(1);
+                ui.displays.valSigmaLocal.className = "font-mono font-bold text-green-600";
             }
 
             // Deflessione (Y è positivo verso il basso nel canvas, mostriamo valore assoluto)
