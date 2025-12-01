@@ -24,6 +24,8 @@
         .accent-gibus-black { accent-color: #1a1a1a; }
         .disabled-group { opacity: 0.5; pointer-events: none; filter: grayscale(1); }
         .fade-enter { transition: opacity 0.3s ease-in-out; }
+        /* Fallback for hidden class in case Tailwind CSS fails to load */
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="flex flex-col h-screen bg-neutral-50 text-neutral-800 overflow-hidden">
