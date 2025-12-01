@@ -414,12 +414,30 @@
         }
 
         // ==================== SAFE VALUE GETTERS ====================
+        /**
+         * Safely get a numeric value from an input element
+         * @param {HTMLInputElement} el - The input element
+         * @param {number} def - Default value if element is null or value is invalid
+         * @returns {number} The parsed float value or default
+         */
         function safeNum(el, def) {
             return el && !isNaN(parseFloat(el.value)) ? parseFloat(el.value) : def;
         }
+        /**
+         * Safely get an integer value from an input element
+         * @param {HTMLInputElement} el - The input element
+         * @param {number} def - Default value if element is null or value is invalid
+         * @returns {number} The parsed integer value or default
+         */
         function safeInt(el, def) {
             return el && !isNaN(parseInt(el.value)) ? parseInt(el.value) : def;
         }
+        /**
+         * Safely get a string value from a select/input element
+         * @param {HTMLElement} el - The input or select element
+         * @param {string} def - Default value if element is null or value is empty
+         * @returns {string} The element value or default
+         */
         function safeStr(el, def) {
             return el && el.value ? el.value : def;
         }
@@ -509,20 +527,30 @@
             // Draw holes if configured
             if (state.bolts > 0 && section.fastenerInfo) {
                 const d_hole_px = section.fastenerInfo.d_hole * 1000 * scale;
+                
+                // Validate hole diameter before drawing
+                if (d_hole_px <= 0) return;
+                
                 const holePositions = [];
                 
                 if (state.holePosition === 'vertical' || state.holePosition === 'both') {
-                    // Holes on left wall
+                    // Holes on left and right walls
                     for (let i = 0; i < state.bolts; i++) {
-                        const y = centerY - H/4 + (i * H/2 / Math.max(1, state.bolts - 1));
+                        // For single bolt, center it; for multiple, distribute evenly
+                        const y = state.bolts === 1 
+                            ? centerY 
+                            : centerY - H/4 + (i * H/2 / (state.bolts - 1));
                         holePositions.push({ x: centerX - W/2 + tV/2, y: y });
                         holePositions.push({ x: centerX + W/2 - tV/2, y: y });
                     }
                 }
                 if (state.holePosition === 'horizontal' || state.holePosition === 'both') {
-                    // Holes on top/bottom walls
+                    // Holes on top and bottom walls
                     for (let i = 0; i < state.bolts; i++) {
-                        const x = centerX - W/4 + (i * W/2 / Math.max(1, state.bolts - 1));
+                        // For single bolt, center it; for multiple, distribute evenly
+                        const x = state.bolts === 1 
+                            ? centerX 
+                            : centerX - W/4 + (i * W/2 / (state.bolts - 1));
                         holePositions.push({ x: x, y: centerY - H/2 + tH/2 });
                         holePositions.push({ x: x, y: centerY + H/2 - tH/2 });
                     }
@@ -532,7 +560,7 @@
                     const hole = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     hole.setAttribute('cx', pos.x);
                     hole.setAttribute('cy', pos.y);
-                    hole.setAttribute('r', d_hole_px / 2);
+                    hole.setAttribute('r', Math.max(1, d_hole_px / 2)); // Ensure minimum radius of 1px
                     hole.setAttribute('fill', '#dc2626');
                     hole.setAttribute('stroke', '#991b1b');
                     hole.setAttribute('stroke-width', 1);
@@ -766,14 +794,14 @@
         // Calculate button
         ui.btnCalculate.addEventListener('click', calculate);
 
-        // Log toggle
+        // Log toggle - track state with a variable for reliable toggling
+        let logVisible = true;
         document.getElementById('toggle-log').addEventListener('click', () => {
             const logEl = document.getElementById('analysis-log');
-            if (logEl.style.display === 'none') {
-                logEl.style.display = 'block';
-            } else {
-                logEl.style.display = 'none';
-            }
+            const toggleBtn = document.getElementById('toggle-log');
+            logVisible = !logVisible;
+            logEl.style.display = logVisible ? 'block' : 'none';
+            toggleBtn.textContent = logVisible ? '▼' : '▲';
         });
 
         // ==================== INITIALIZATION ====================
