@@ -757,7 +757,7 @@ class CorotationalBeamElement {
     
     // Current length and orientation
     getGeometry() {
-        const dx = this.nodeJ.x + this.nodeJ.u - (this.nodeI. x + this.nodeI.u);
+        const dx = this.nodeJ.x + this.nodeJ.u - (this.nodeI.x + this.nodeI.u);
         const dy = this.nodeJ.y + this.nodeJ.v - (this.nodeI.y + this.nodeI.v);
         const L = Math.sqrt(dx * dx + dy * dy);
         const cos_theta = dx / L;
@@ -901,7 +901,7 @@ class CorotationalBeamElement {
         // Local displacements
         const u_local = [
             cos_theta * this.nodeI.u + sin_theta * this.nodeI.v,
-            -sin_theta * this.nodeI. u + cos_theta * this.nodeI.v,
+            -sin_theta * this.nodeI.u + cos_theta * this.nodeI.v,
             this.nodeI.theta,
             cos_theta * this.nodeJ.u + sin_theta * this.nodeJ.v,
             -sin_theta * this.nodeJ.u + cos_theta * this.nodeJ.v,
