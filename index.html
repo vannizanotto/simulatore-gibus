@@ -661,7 +661,13 @@
             g: 9.81, startX: 50, groundY: 300, svgWidth: 900, svgHeight: 600, pixelsPerMeter: 180, densityAluminum: 2700,
             // Fatigue analysis constants for stress amplitude/mean estimation
             FATIGUE_STRESS_AMPLITUDE_RATIO: 0.3,  // σ_a estimated as 30% of max stress
-            FATIGUE_STRESS_MEAN_RATIO: 0.7        // σ_m estimated as 70% of max stress
+            FATIGUE_STRESS_MEAN_RATIO: 0.7,       // σ_m estimated as 70% of max stress
+            // FEM solver convergence parameters
+            ALPHA_INITIAL: 0.1,                   // Relaxation factor for first iterations (aggressive)
+            ALPHA_STABLE: 0.02,                   // Relaxation factor for later iterations (stable)
+            ALPHA_TRANSITION_ITER: 10,            // Iteration at which to switch from initial to stable alpha
+            // Overlap zone stiffness coefficient (accounts for imperfect collaboration)
+            OVERLAP_STIFFNESS_FACTOR: 0.5         // Factor for overlap zone combined stiffness
         };
 
         const ui = {
@@ -1651,7 +1657,7 @@
             // Nella zona di penetrazione, entrambe le sezioni (profilo e spalla) contribuiscono
             // Approssimiamo con una rigidezza che tiene conto della sovrapposizione
             const overlapRatio = Math.min(1, penetration_m / (beamHeight_m * 2));
-            const EI_stiff = EI_beam + EI_exposed * overlapRatio * 0.5;
+            const EI_stiff = EI_beam + EI_exposed * overlapRatio * CONSTANTS.OVERLAP_STIFFNESS_FACTOR;
             
             const pulleyX = state.length;
             const pulleyY = state.pulleyY;
@@ -1669,7 +1675,9 @@
 
             for(let iter=0; iter<maxIter; iter++) {
                 // FIX: Rilassamento adattivo - più aggressivo all'inizio per convergenza veloce
-                const alpha = iter < 10 ? 0.1 : 0.02;
+                const alpha = iter < CONSTANTS.ALPHA_TRANSITION_ITER 
+                    ? CONSTANTS.ALPHA_INITIAL 
+                    : CONSTANTS.ALPHA_STABLE;
                 
                 const tipNode = nodes[numSegments];
                 let Fx = 0, Fy = 0;
