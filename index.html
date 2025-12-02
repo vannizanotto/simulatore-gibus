@@ -1770,12 +1770,25 @@
                  }
             }
 
-            // Risultati - Calcolo tensioni usando sezione netta
+            // ===================================================================
+            // CALCOLO TENSIONI - Risultati per analisi statica e fatica
+            // ===================================================================
+            // Le tensioni sono calcolate usando la sezione netta (EC9)
+            // 
+            // σ_nominale: Usata per VERIFICA STATICA (snervamento/rottura)
+            //             Formula: σ = M × y / I_net
+            //             NON include il fattore Kt (appropriato per materiali duttili)
+            //
+            // σ_locale:   Usata per VERIFICA A FATICA
+            //             Formula: σ_loc = σ_nominale × Kt
+            //             Include la concentrazione tensioni nella zona forata
+            // ===================================================================
+            
             const momentWall = nodes[0].moment; 
             
-            // Tensione nominale sull'inserto (usando inerzia netta)
+            // Tensione NOMINALE sull'inserto (per verifica STATICA)
             const stressInsert_nominal = (momentWall * (H_crit_m / 2)) / I_insert_net;
-            // Tensione locale massima = nominale × Kt
+            // Tensione LOCALE sull'inserto (per verifica FATICA)
             const stressInsert_local = stressInsert_nominal * Kt_insert;
             
             const startBeamIndex = Math.floor((distWall_m + penetration_m) / ds);
@@ -1785,9 +1798,9 @@
             }
             if (maxMomentBeam === 0 && startBeamIndex < numSegments) maxMomentBeam = nodes[startBeamIndex].moment;
             
-            // Tensione nominale sulla trave (usando inerzia netta nella zona forata)
+            // Tensione NOMINALE sulla trave (per verifica STATICA)
             const stressBeam_nominal = (maxMomentBeam * (beamHeight_m / 2)) / I_beam_net;
-            // Tensione locale massima = nominale × Kt
+            // Tensione LOCALE sulla trave (per verifica FATICA)
             const stressBeam_local = stressBeam_nominal * Kt_beam;
             
             // Per retrocompatibilità: stress nominale per calcoli tradizionali
@@ -2147,27 +2160,46 @@
             const matInsert = MATERIALS[state.insertMatKey];
             const matBeam = MATERIALS[state.beamMatKey];
             
-            // Usa tensione locale (con Kt) come valore critico se ci sono fori
+            // =====================================================================
+            // IMPORTANTE: Separazione tra verifica STATICA e analisi a FATICA
+            // =====================================================================
+            // Per la VERIFICA STATICA (snervamento/rottura) su materiali duttili come l'alluminio:
+            //   - Si usa la tensione NOMINALE (σ = M·y/I)
+            //   - La plasticizzazione locale ridistribuisce le tensioni
+            //   - Il fattore Kt NON viene applicato direttamente
+            //
+            // Per la VERIFICA A FATICA:
+            //   - Si usa la tensione LOCALE (σ_local = σ_nominal × Kt)
+            //   - Si applica anche il fattore Kf (sensibilità all'intaglio)
+            //   - Questa è mostrata nella sezione "Analisi Avanzata"
+            // =====================================================================
+            
             const hasHoles = holeDiameter_mm > 0 && state.fastenerType !== 'none';
-            const beamStressMPa_display = hasHoles ? (stressBeam_local / 1e6) : (stressBeam / 1e6);
-            const insertStressMPa_display = hasHoles ? (stressInsert_local / 1e6) : (stressInsert / 1e6);
+            
+            // Tensione nominale per verifica STATICA (snervamento/rottura)
             const beamStressMPa_nominal = stressBeam / 1e6;
             const insertStressMPa_nominal = stressInsert / 1e6;
             
+            // Tensione locale per verifica a FATICA (con Kt)
+            const beamStressMPa_local = hasHoles ? (stressBeam_local / 1e6) : beamStressMPa_nominal;
+            const insertStressMPa_local = hasHoles ? (stressInsert_local / 1e6) : insertStressMPa_nominal;
+            
             if (ui.displays.resBeamStress) {
-                // Mostra la tensione locale (critica) quando ci sono fori
-                ui.displays.resBeamStress.textContent = beamStressMPa_display.toFixed(1);
+                // STATICA: Mostra la tensione NOMINALE per verifica snervamento/rottura
+                ui.displays.resBeamStress.textContent = beamStressMPa_nominal.toFixed(1);
                 if (ui.displays.resLimitBeamYield) ui.displays.resLimitBeamYield.textContent = finalBeamLimit.toFixed(0);
                 if (ui.displays.resLimitBeamTensile) ui.displays.resLimitBeamTensile.textContent = finalBeamTensile.toFixed(0);
-                // Valuta il badge basandosi sulla tensione locale
-                updateBadge(ui.displays.badgeBeam, beamStressMPa_display, finalBeamLimit, finalBeamTensile, ui.displays.resBeamStress);
+                // Badge basato su tensione NOMINALE (corretto per materiali duttili)
+                updateBadge(ui.displays.badgeBeam, beamStressMPa_nominal, finalBeamLimit, finalBeamTensile, ui.displays.resBeamStress);
             }
 
             if (ui.displays.resInsertStress) {
-                ui.displays.resInsertStress.textContent = insertStressMPa_display.toFixed(1);
+                // STATICA: Mostra la tensione NOMINALE per verifica snervamento/rottura
+                ui.displays.resInsertStress.textContent = insertStressMPa_nominal.toFixed(1);
                 if (ui.displays.resLimitInsertYield) ui.displays.resLimitInsertYield.textContent = finalInsertLimit.toFixed(0);
                 if (ui.displays.resLimitInsertTensile) ui.displays.resLimitInsertTensile.textContent = finalInsertTensile.toFixed(0);
-                updateBadge(ui.displays.badgeInsert, insertStressMPa_display, finalInsertLimit, finalInsertTensile, ui.displays.resInsertStress);
+                // Badge basato su tensione NOMINALE (corretto per materiali duttili)
+                updateBadge(ui.displays.badgeInsert, insertStressMPa_nominal, finalInsertLimit, finalInsertTensile, ui.displays.resInsertStress);
             }
 
             // --- AGGIORNAMENTO DISPLAY ANALISI AVANZATA FORI ---
@@ -2195,13 +2227,21 @@
                 }
             }
             
-            // Tensione locale (σ × Kt)
+            // Tensione locale (σ × Kt) - usata per analisi FATICA
+            // Nota: questo valore NON viene usato per la verifica statica (snervamento)
+            // ma solo per l'analisi a fatica nella sezione avanzata
             if (ui.displays.valSigmaLocal) {
-                const sigmaLocal = hasHoles ? beamStressMPa_display : beamStressMPa_nominal;
-                ui.displays.valSigmaLocal.textContent = sigmaLocal.toFixed(1);
-                if (sigmaLocal > finalBeamLimit) {
+                ui.displays.valSigmaLocal.textContent = beamStressMPa_local.toFixed(1);
+                // Colore basato sul limite di fatica (σ_e ≈ 0.4 × σ_y per alluminio)
+                // Usa la costante definita in fem_engine_v4.js se disponibile
+                const fatigueFactor = (typeof HOLE_ANALYSIS_CONSTANTS !== 'undefined') 
+                    ? HOLE_ANALYSIS_CONSTANTS.ALUMINUM_FATIGUE_LIMIT_FACTOR 
+                    : 0.4;
+                const fatigueLimit = finalBeamLimit * fatigueFactor;
+                // Ordine: prima verifica critica (>yield), poi warning fatica (>fatigue), poi OK
+                if (beamStressMPa_local > finalBeamLimit) {
                     ui.displays.valSigmaLocal.className = "font-mono font-bold text-red-600";
-                } else if (sigmaLocal > finalBeamLimit * 0.8) {
+                } else if (beamStressMPa_local > fatigueLimit) {
                     ui.displays.valSigmaLocal.className = "font-mono font-bold text-yellow-600";
                 } else {
                     ui.displays.valSigmaLocal.className = "font-mono font-bold text-green-600";
