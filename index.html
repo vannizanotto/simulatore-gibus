@@ -1643,10 +1643,16 @@
 
             const EI_beam = E_beam * I_beam;
             const EI_exposed = E_insert * I_insert_crit;
-            const EI_stiff = EI_beam * 10; 
 
             const distWall_m = state.distWall / 100;
             const penetration_m = state.penetration / 100;
+            
+            // FIX: Rigidezza combinata nella zona di sovrapposizione basata sulla fisica
+            // Nella zona di penetrazione, entrambe le sezioni (profilo e spalla) contribuiscono
+            // Approssimiamo con una rigidezza che tiene conto della sovrapposizione
+            const overlapRatio = Math.min(1, penetration_m / (beamHeight_m * 2));
+            const EI_stiff = EI_beam + EI_exposed * overlapRatio * 0.5;
+            
             const pulleyX = state.length;
             const pulleyY = state.pulleyY;
             const yieldMomentInsert = (insertYieldEff * 1e6 * I_insert_crit) / (H_crit_m / 2); 
@@ -1660,9 +1666,11 @@
             // --- 2. SOLUTORE ITERATIVO (Logica Stabile di Trave_4) ---
             let finalFx = 0, finalFy = 0;
             const maxIter = 50; 
-            const alpha = 0.02; 
 
             for(let iter=0; iter<maxIter; iter++) {
+                // FIX: Rilassamento adattivo - più aggressivo all'inizio per convergenza veloce
+                const alpha = iter < 10 ? 0.1 : 0.02;
+                
                 const tipNode = nodes[numSegments];
                 let Fx = 0, Fy = 0;
 
@@ -1686,8 +1694,9 @@
                     const leverArmX = tipNode.x - nodes[i].x;
                     const leverArmY = tipNode.y - nodes[i].y;
                     // Momento = Forza * Braccio (Fy verso il basso è positivo nel calcolo del momento flettente qui)
+                    // FIX: Manteniamo il segno del momento per l'integrazione corretta
                     let M = Fy * leverArmX - Fx * leverArmY;
-                    nodes[i].moment = Math.max(0, M); 
+                    nodes[i].moment = M; 
                 }
 
                 // Integrazione
@@ -1705,15 +1714,19 @@
                     else if (s_mid < distWall_m + penetration_m) { EI = EI_stiff; M_yield = yieldMomentBeam * 2; }
 
                     const M_avg = (nodes[i].moment + nodes[i+1].moment) / 2;
+                    // FIX: Usiamo il valore assoluto per il calcolo della curvatura
+                    // ma manteniamo il segno per la direzione della deformazione
+                    const M_abs = Math.abs(M_avg);
+                    const M_sign = M_avg >= 0 ? 1 : -1;
                     let kappa = 0;
 
-                    if (M_avg <= M_yield) {
-                        kappa = M_avg / EI;
+                    if (M_abs <= M_yield) {
+                        kappa = M_sign * (M_abs / EI);
                         nodes[i].kappa_plastic = 0; 
                     } else {
                         const ky = M_yield / EI;
-                        const M_excess = M_avg - M_yield;
-                        kappa = ky + M_excess / (alpha * EI);
+                        const M_excess = M_abs - M_yield;
+                        kappa = M_sign * (ky + M_excess / (alpha * EI));
                         nodes[i].kappa_plastic = kappa - (M_avg / EI); 
                     }
                     
@@ -1740,7 +1753,8 @@
                  const rTip = residualNodes[numSegments];
                  for(let i=0; i<=numSegments; i++) {
                     const lx = rTip.x - residualNodes[i].x;
-                    residualNodes[i].moment = Math.max(0, residualLoad * lx);
+                    // FIX: Manteniamo il segno del momento anche per il carico residuo
+                    residualNodes[i].moment = residualLoad * lx;
                  }
                 
                  let rTheta = 0; let rX = 0; let rY = 0;
@@ -1784,22 +1798,36 @@
             //             Include la concentrazione tensioni nella zona forata
             // ===================================================================
             
-            const momentWall = nodes[0].moment; 
+            // FIX: Trova il momento massimo nella zona della spalla (inserto),
+            // non solo alla parete. Il momento massimo sulla spalla è tipicamente
+            // all'interfaccia con il profilo.
+            const insertEndIndex = Math.ceil((distWall_m + penetration_m) / ds);
+            let maxMomentInsert = 0;
+            for(let i = 0; i <= insertEndIndex; i++) {
+                if(Math.abs(nodes[i].moment) > Math.abs(maxMomentInsert)) {
+                    maxMomentInsert = nodes[i].moment;
+                }
+            }
+            // Per compatibilità: il momentWall è il momento massimo nella zona inserto
+            const momentWall = maxMomentInsert;
             
             // Tensione NOMINALE sull'inserto (per verifica STATICA)
-            const stressInsert_nominal = (momentWall * (H_crit_m / 2)) / I_insert_net;
+            // Usiamo il valore assoluto del momento massimo per il calcolo della tensione
+            const stressInsert_nominal = (Math.abs(maxMomentInsert) * (H_crit_m / 2)) / I_insert_net;
             // Tensione LOCALE sull'inserto (per verifica FATICA)
             const stressInsert_local = stressInsert_nominal * Kt_insert;
             
             const startBeamIndex = Math.floor((distWall_m + penetration_m) / ds);
             let maxMomentBeam = 0;
             for(let i=startBeamIndex; i<=numSegments; i++) {
-                if(nodes[i].moment > maxMomentBeam) maxMomentBeam = nodes[i].moment;
+                // FIX: Usiamo il valore assoluto per trovare il momento massimo
+                if(Math.abs(nodes[i].moment) > Math.abs(maxMomentBeam)) maxMomentBeam = nodes[i].moment;
             }
             if (maxMomentBeam === 0 && startBeamIndex < numSegments) maxMomentBeam = nodes[startBeamIndex].moment;
             
             // Tensione NOMINALE sulla trave (per verifica STATICA)
-            const stressBeam_nominal = (maxMomentBeam * (beamHeight_m / 2)) / I_beam_net;
+            // Usiamo il valore assoluto del momento massimo per il calcolo della tensione
+            const stressBeam_nominal = (Math.abs(maxMomentBeam) * (beamHeight_m / 2)) / I_beam_net;
             // Tensione LOCALE sulla trave (per verifica FATICA)
             const stressBeam_local = stressBeam_nominal * Kt_beam;
             
