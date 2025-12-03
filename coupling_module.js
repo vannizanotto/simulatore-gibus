@@ -34,9 +34,14 @@ const COUPLING_CONSTANTS = {
     STATUS_THRESHOLDS: {
         OTTIMO: 0.5,      // Utilizzo < 50%
         OK: 0.8,          // Utilizzo < 80%
-        ATTENZIONE: 1.0,  // Utilizzo < 100%
-        CRITICO: Infinity // Utilizzo >= 100%
+        ATTENZIONE: 1.0   // Utilizzo < 100%, beyond = CRITICO
     },
+    
+    // Valore massimo per fattore sicurezza (per display)
+    MAX_SAFETY_FACTOR_DISPLAY: 99.99,
+    
+    // Braccio minimo effettivo per evitare divisione per zero (m)
+    MIN_EFFECTIVE_ARM: 0.01,
     
     // Fattore di riduzione per fatica (cicli ripetuti)
     FATIGUE_REDUCTION_FACTOR: 0.7,
@@ -365,7 +370,7 @@ class CouplingAnalysis {
         
         const adhesive = ADHESIVES_DB[this.adhesiveType];
         if (!adhesive) {
-            console.warn(`Adesivo non trovato: ${this.adhesiveType}`);
+            console.warn('Adhesive type not found: ' + this.adhesiveType);
             return { F_Rd: 0, stiffness: 0, tau_Rd: 0, area: 0 };
         }
         
@@ -417,7 +422,7 @@ class CouplingAnalysis {
         
         const fastener = FASTENERS_COUPLING_DB[this.fastenerType];
         if (!fastener) {
-            console.warn(`Fissaggio non trovato: ${this.fastenerType}`);
+            console.warn('Fastener type not found: ' + this.fastenerType);
             return { F_Rd: 0, stiffness: 0, perFastener: 0 };
         }
         
@@ -476,14 +481,16 @@ class CouplingAnalysis {
         }
         
         // Forza tangenziale Ft
+        // Ft positivo = resistenza aggiuntiva (favorevole)
+        // Ft negativo = carico aggiuntivo (sfavorevole) - viene considerato nella verifica
         let Ft_applied = 0;
         if (this.enableFt) {
             Ft_applied = this.Ft_manual;
         }
         
-        // La Ft è un contributo addizionale (resistenza aggiuntiva se favorevole)
-        // Se Ft è sfavorevole (carico), viene considerata nella verifica
-        const F_Rd_total = F_Rd + (Ft_applied > 0 ? Ft_applied : 0);
+        // Capacità totale: F_Rd + Ft se favorevole
+        // Se Ft è negativo (sfavorevole), non contribuisce alla resistenza
+        const F_Rd_total = F_Rd + Math.max(0, Ft_applied);
         
         // Rigidezza minima per evitare singolarità
         totalStiffness = Math.max(COUPLING_CONSTANTS.MIN_INTERFACE_STIFFNESS, totalStiffness);
@@ -533,13 +540,26 @@ class CouplingAnalysis {
         
         // Calcola utilizzo
         // L'utilizzo è il rapporto tra forza applicata e resistenza
-        const utilization = combined.F_Rd_total > 0 ? Ft_Ed / combined.F_Rd_total : (Ft_Ed > 0 ? Infinity : 0);
+        // Se F_Rd_total è zero e Ft_Ed > 0, utilizzo è massimo (clamped)
+        let utilization = 0;
+        if (combined.F_Rd_total > 0) {
+            utilization = Ft_Ed / combined.F_Rd_total;
+        } else if (Ft_Ed > 0) {
+            utilization = COUPLING_CONSTANTS.MAX_SAFETY_FACTOR_DISPLAY; // Clamp to max displayable
+        }
         
         // Calcola scorrimento
         const slip = this.calculateSlip(Ft_Ed);
         
-        // Calcola fattore di sicurezza
-        const SF = combined.F_Rd_total > 0 ? combined.F_Rd_total / Math.max(1, Ft_Ed) : Infinity;
+        // Calcola fattore di sicurezza (clamped to max displayable value)
+        let SF = COUPLING_CONSTANTS.MAX_SAFETY_FACTOR_DISPLAY;
+        if (Ft_Ed > 0 && combined.F_Rd_total > 0) {
+            SF = Math.min(combined.F_Rd_total / Ft_Ed, COUPLING_CONSTANTS.MAX_SAFETY_FACTOR_DISPLAY);
+        } else if (Ft_Ed <= 0 && combined.F_Rd_total > 0) {
+            SF = COUPLING_CONSTANTS.MAX_SAFETY_FACTOR_DISPLAY; // No load = infinite SF
+        } else if (combined.F_Rd_total <= 0 && Ft_Ed > 0) {
+            SF = 0; // No resistance with load = zero SF
+        }
         
         // Determina stato
         let status = 'CRITICO';
@@ -807,7 +827,8 @@ function calculateInterfaceForces(params) {
     // Forza tangenziale all'interfaccia
     // Per equilibrio: Ft = M / (penetration / 2)
     // La penetrazione è il braccio della coppia resistente
-    const effectiveArm = Math.max(0.01, penetration / 2);
+    // MIN_EFFECTIVE_ARM previene divisione per zero quando penetrazione è molto piccola
+    const effectiveArm = Math.max(COUPLING_CONSTANTS.MIN_EFFECTIVE_ARM, penetration / 2);
     const Ft = M / effectiveArm;
     
     // Forza normale (reazione vincolare)

@@ -2641,9 +2641,9 @@
          * Esegue l'analisi di accoppiamento e aggiorna l'UI
          */
         function updateCouplingAnalysis() {
-            // Verifica che il modulo CouplingAnalysis sia disponibile
+            // Verify CouplingAnalysis module is available
             if (typeof CouplingAnalysis === 'undefined') {
-                console.warn('CouplingAnalysis non disponibile');
+                console.warn('CouplingAnalysis module not available');
                 return;
             }
             
@@ -2780,8 +2780,11 @@
             }
             
             // Fattore di sicurezza
+            // Use MAX_SAFETY_FACTOR_DISPLAY from COUPLING_CONSTANTS for threshold
             if (ui.displays.valCouplingSf) {
-                if (result.SF === Infinity || result.SF > 99) {
+                const maxSfDisplay = typeof COUPLING_CONSTANTS !== 'undefined' ? 
+                    COUPLING_CONSTANTS.MAX_SAFETY_FACTOR_DISPLAY : 99.99;
+                if (result.SF >= maxSfDisplay) {
                     ui.displays.valCouplingSf.textContent = '∞';
                     ui.displays.valCouplingSf.className = 'text-[9px] font-mono font-bold text-green-700';
                 } else {
@@ -2833,6 +2836,9 @@
         });
         
         // Aggancia aggiornamento coupling all'update generale
+        // Note: This wrapper pattern is used because the main update() function is defined
+        // earlier in the script and cannot be modified directly. This approach ensures
+        // coupling analysis runs after every geometry/load update.
         const originalUpdate = update;
         update = function() {
             originalUpdate();
