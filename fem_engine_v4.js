@@ -2090,6 +2090,515 @@ class DynamicAnalysis {
 }
 
 // ============================================================================
+// MODULO ACCOPPIAMENTO SPALLA-PROFILO (Coupling Module)
+// ============================================================================
+// Analisi del collegamento tra spalla (inserto) e profilo (trave)
+// Supporta tre meccanismi: Colla (Adhesive), Fissaggi (Fasteners), Ft (Friction/Manual)
+// Basato su EN 1999-1-1 (EC9) per collegamenti in alluminio
+// ============================================================================
+
+/**
+ * Costanti per l'analisi dell'accoppiamento
+ */
+const COUPLING_CONSTANTS = {
+    // Coefficienti parziali di sicurezza (EN 1999-1-1)
+    gamma_Ma: 1.50,    // Adesivi - fattore sicurezza
+    gamma_Mf: 1.25,    // Fissaggi meccanici
+    gamma_Mfr: 1.30,   // Attrito
+    
+    // Fattori di riduzione
+    k_age: 0.80,       // Invecchiamento adesivo
+    k_temp: 0.90,      // Temperatura (condizioni normali)
+    k_humid: 0.85,     // Umidità
+    
+    // Rigidezza interfaccia (valori tipici)
+    k_adhesive_base: 500,   // N/mm³ - rigidezza adesivo base
+    k_fastener_base: 1000,  // N/mm - rigidezza fissaggio base
+    
+    // Slip ammissibile (mm)
+    slip_limit_serviceability: 0.10,  // Limite di servizio
+    slip_limit_ultimate: 0.50,         // Limite ultimo
+    
+    // Dimensioni minime zona adesiva (mm)
+    min_overlap_length: 20,
+    min_overlap_width: 10,
+};
+
+/**
+ * Database adesivi strutturali per alluminio
+ */
+const ADHESIVES_DB = {
+    'epoxy-2k': {
+        name: 'Epossidico Bicomponente',
+        tau_k: 15.0,       // Resistenza a taglio caratteristica (MPa)
+        sigma_k: 20.0,     // Resistenza a trazione caratteristica (MPa)
+        E_adhesive: 2500,  // Modulo elastico (MPa)
+        G_adhesive: 900,   // Modulo di taglio (MPa)
+        t_min: 0.1,        // Spessore minimo (mm)
+        t_max: 0.5,        // Spessore massimo (mm)
+        t_optimal: 0.2,    // Spessore ottimale (mm)
+        temp_max: 80,      // Temperatura massima di esercizio (°C)
+    },
+    'methacrylate': {
+        name: 'Metacrilato Strutturale',
+        tau_k: 12.0,
+        sigma_k: 18.0,
+        E_adhesive: 1800,
+        G_adhesive: 650,
+        t_min: 0.2,
+        t_max: 1.0,
+        t_optimal: 0.5,
+        temp_max: 100,
+    },
+    'polyurethane': {
+        name: 'Poliuretano Elastico',
+        tau_k: 5.0,
+        sigma_k: 8.0,
+        E_adhesive: 500,
+        G_adhesive: 180,
+        t_min: 0.5,
+        t_max: 3.0,
+        t_optimal: 1.5,
+        temp_max: 70,
+    },
+    'silicone-structural': {
+        name: 'Silicone Strutturale',
+        tau_k: 1.5,
+        sigma_k: 2.0,
+        E_adhesive: 50,
+        G_adhesive: 18,
+        t_min: 3.0,
+        t_max: 10.0,
+        t_optimal: 6.0,
+        temp_max: 150,
+    },
+    'acrylic-tape': {
+        name: 'Nastro Acrilico VHB',
+        tau_k: 0.8,
+        sigma_k: 1.2,
+        E_adhesive: 20,
+        G_adhesive: 7,
+        t_min: 0.5,
+        t_max: 2.0,
+        t_optimal: 1.1,
+        temp_max: 90,
+    },
+};
+
+/**
+ * Classe InterfaceElement - Elemento di interfaccia per analisi locale
+ * Rappresenta un elemento discreto dell'interfaccia spalla-profilo
+ */
+class InterfaceElement {
+    /**
+     * @param {Object} params - Parametri dell'elemento
+     * @param {number} params.x - Posizione lungo l'interfaccia (mm)
+     * @param {number} params.length - Lunghezza elemento (mm)
+     * @param {number} params.width - Larghezza elemento (mm)
+     * @param {number} params.k_local - Rigidezza locale (N/mm)
+     */
+    constructor(params) {
+        this.x = params.x || 0;
+        this.length = params.length || 10;
+        this.width = params.width || 30;
+        this.k_local = params.k_local || 1000;
+        
+        // Stato
+        this.slip = 0;           // Scorrimento (mm)
+        this.shear_force = 0;    // Forza di taglio (N)
+        this.failed = false;     // Stato di rottura
+    }
+    
+    /**
+     * Calcola area dell'elemento
+     * @returns {number} Area (mm²)
+     */
+    getArea() {
+        return this.length * this.width;
+    }
+    
+    /**
+     * Aggiorna stato dell'elemento dato uno scorrimento imposto
+     * @param {number} delta - Scorrimento (mm)
+     * @returns {Object} Stato aggiornato
+     */
+    update(delta) {
+        this.slip = delta;
+        this.shear_force = this.k_local * delta;
+        return {
+            slip: this.slip,
+            force: this.shear_force,
+            failed: this.failed
+        };
+    }
+}
+
+/**
+ * Classe CouplingAnalysis - Analisi completa dell'accoppiamento
+ * Supporta combinazione libera di: Adhesive, Fasteners, Ft (friction/manual)
+ */
+class CouplingAnalysis {
+    /**
+     * @param {Object} params - Parametri geometrici
+     * @param {number} params.overlap_length - Lunghezza sovrapposizione (mm)
+     * @param {number} params.overlap_width - Larghezza sovrapposizione (mm)
+     * @param {Object} params.beam_material - Materiale profilo
+     * @param {Object} params.insert_material - Materiale spalla
+     */
+    constructor(params) {
+        // Geometria
+        this.overlap_length = params.overlap_length || 100;  // mm
+        this.overlap_width = params.overlap_width || 30;     // mm
+        
+        // Materiali
+        this.beam_material = params.beam_material || MATERIALS_V4['6061-T6'];
+        this.insert_material = params.insert_material || MATERIALS_V4['46100-F'];
+        
+        // Configurazione metodi (tutti disabilitati di default)
+        this.adhesive_enabled = false;
+        this.fasteners_enabled = false;
+        this.ft_enabled = false;  // Friction/Manual Ft
+        
+        // Parametri adesivo
+        this.adhesive_type = 'epoxy-2k';
+        this.adhesive_thickness = 0.2;  // mm
+        
+        // Parametri fissaggi
+        this.fastener_type = 'screw-m4';
+        this.fastener_count = 3;
+        this.fastener_spacing = 50;  // mm
+        
+        // Parametro Ft manuale (forza tangenziale, N)
+        this.ft_manual = 0;
+        
+        // Risultati
+        this.results = null;
+        this.interface_elements = [];
+    }
+    
+    /**
+     * Abilita/disabilita metodo adesivo
+     * @param {boolean} enabled - Stato
+     * @param {Object} options - Opzioni {type, thickness}
+     */
+    enableAdhesive(enabled, options = {}) {
+        this.adhesive_enabled = enabled;
+        if (options.type) this.adhesive_type = options.type;
+        if (options.thickness) this.adhesive_thickness = options.thickness;
+        return this;
+    }
+    
+    /**
+     * Abilita/disabilita metodo fissaggi
+     * @param {boolean} enabled - Stato
+     * @param {Object} options - Opzioni {type, count, spacing}
+     */
+    enableFasteners(enabled, options = {}) {
+        this.fasteners_enabled = enabled;
+        if (options.type) this.fastener_type = options.type;
+        if (options.count) this.fastener_count = options.count;
+        if (options.spacing) this.fastener_spacing = options.spacing;
+        return this;
+    }
+    
+    /**
+     * Abilita/disabilita Ft manuale (friction/external force)
+     * @param {boolean} enabled - Stato
+     * @param {number} value - Valore Ft (N)
+     */
+    enableFt(enabled, value = 0) {
+        this.ft_enabled = enabled;
+        this.ft_manual = value;
+        return this;
+    }
+    
+    /**
+     * Calcola resistenza adesivo: F_a,Rd
+     * @returns {Object} {F_Rd, tau_d, A_eff, k_adhesive}
+     */
+    calculateAdhesiveResistance() {
+        if (!this.adhesive_enabled) {
+            return { F_Rd: 0, tau_d: 0, A_eff: 0, k_adhesive: 0 };
+        }
+        
+        const adhesive = ADHESIVES_DB[this.adhesive_type];
+        if (!adhesive) {
+            return { F_Rd: 0, tau_d: 0, A_eff: 0, k_adhesive: 0 };
+        }
+        
+        // Area effettiva (mm²)
+        const A_eff = this.overlap_length * this.overlap_width;
+        
+        // Resistenza di progetto a taglio (MPa)
+        // τ_d = τ_k × k_age × k_temp × k_humid / γ_Ma
+        const tau_d = (adhesive.tau_k * 
+                      COUPLING_CONSTANTS.k_age * 
+                      COUPLING_CONSTANTS.k_temp * 
+                      COUPLING_CONSTANTS.k_humid) / 
+                      COUPLING_CONSTANTS.gamma_Ma;
+        
+        // Resistenza caratteristica (N)
+        const F_Rd = tau_d * A_eff;
+        
+        // Rigidezza dell'adesivo (N/mm)
+        // k = G × A / t
+        const t = Math.max(adhesive.t_min, Math.min(adhesive.t_max, this.adhesive_thickness));
+        const k_adhesive = (adhesive.G_adhesive * A_eff) / t;
+        
+        return {
+            F_Rd: F_Rd,
+            tau_d: tau_d,
+            A_eff: A_eff,
+            k_adhesive: k_adhesive,
+            adhesive_name: adhesive.name
+        };
+    }
+    
+    /**
+     * Calcola resistenza fissaggi: F_f,Rd
+     * @returns {Object} {F_Rd, F_single, n_eff, k_fasteners}
+     */
+    calculateFastenersResistance() {
+        if (!this.fasteners_enabled || this.fastener_count <= 0) {
+            return { F_Rd: 0, F_single: 0, n_eff: 0, k_fasteners: 0 };
+        }
+        
+        const fastener = FASTENERS_DB_V4[this.fastener_type];
+        if (!fastener || fastener.diameter === 0) {
+            return { F_Rd: 0, F_single: 0, n_eff: 0, k_fasteners: 0 };
+        }
+        
+        const d = fastener.diameter;  // mm
+        const n = this.fastener_count;
+        
+        // Resistenza a taglio di un fissaggio (formula semplificata)
+        // Per viti: F_v,Rd ≈ 0.6 × f_ub × A_s / γ_Mf
+        // Assumiamo f_ub = 400 MPa (classe 4.6) e A_s ≈ 0.7854 × d²
+        const f_ub = 400;  // MPa
+        const A_s = 0.7854 * d * d;  // mm²
+        const F_v_single = (0.6 * f_ub * A_s) / COUPLING_CONSTANTS.gamma_Mf;
+        
+        // Numero efficace (riduzione per file multiple)
+        // n_eff = min(n, 1 + 0.9×(n-1)) per fissaggi in linea
+        const n_eff = Math.min(n, 1 + 0.9 * (n - 1));
+        
+        // Resistenza totale (N)
+        const F_Rd = F_v_single * n_eff;
+        
+        // Rigidezza fissaggi (N/mm) - approssimata
+        const k_fasteners = n * COUPLING_CONSTANTS.k_fastener_base * (d / 4);
+        
+        return {
+            F_Rd: F_Rd,
+            F_single: F_v_single,
+            n_eff: n_eff,
+            k_fasteners: k_fasteners,
+            fastener_name: fastener.name
+        };
+    }
+    
+    /**
+     * Calcola contributo Ft (attrito o forza manuale)
+     * @returns {Object} {F_Rd, source}
+     */
+    calculateFtContribution() {
+        if (!this.ft_enabled) {
+            return { F_Rd: 0, source: 'disabled' };
+        }
+        
+        // Ft manuale già definito dall'utente
+        const F_Rd = this.ft_manual / COUPLING_CONSTANTS.gamma_Mfr;
+        
+        return {
+            F_Rd: F_Rd,
+            F_Ed: this.ft_manual,  // Forza di progetto (senza coefficiente)
+            source: 'manual'
+        };
+    }
+    
+    /**
+     * Calcola la rigidezza totale dell'interfaccia
+     * @returns {number} k_interface (N/mm)
+     */
+    calculateInterfaceStiffness() {
+        let k_total = 0;
+        
+        if (this.adhesive_enabled) {
+            const adhesiveRes = this.calculateAdhesiveResistance();
+            k_total += adhesiveRes.k_adhesive;
+        }
+        
+        if (this.fasteners_enabled) {
+            const fastenersRes = this.calculateFastenersResistance();
+            k_total += fastenersRes.k_fasteners;
+        }
+        
+        // Ft non contribuisce direttamente alla rigidezza elastica
+        // ma può essere considerato come una forza di precarico
+        
+        return k_total;
+    }
+    
+    /**
+     * Calcola lo scorrimento dell'interfaccia dato un carico
+     * @param {number} F_Ed - Forza applicata (N)
+     * @returns {number} Scorrimento (mm)
+     */
+    calculateSlip(F_Ed) {
+        const k_interface = this.calculateInterfaceStiffness();
+        if (k_interface <= 0) return Infinity;
+        
+        // Sottrae il contributo Ft dalla forza (se attivo)
+        let F_effective = F_Ed;
+        if (this.ft_enabled) {
+            F_effective = Math.max(0, F_Ed - this.ft_manual);
+        }
+        
+        return F_effective / k_interface;
+    }
+    
+    /**
+     * Esegue analisi completa dell'accoppiamento
+     * @param {number} F_Ed - Forza di progetto applicata (N)
+     * @returns {Object} Risultati completi
+     */
+    analyze(F_Ed) {
+        // Calcola contributi individuali
+        const adhesiveRes = this.calculateAdhesiveResistance();
+        const fastenersRes = this.calculateFastenersResistance();
+        const ftRes = this.calculateFtContribution();
+        
+        // Resistenza totale (somma dei contributi)
+        const F_Rd_total = adhesiveRes.F_Rd + fastenersRes.F_Rd + ftRes.F_Rd;
+        
+        // Rigidezza totale
+        const k_interface = this.calculateInterfaceStiffness();
+        
+        // Scorrimento
+        const slip = this.calculateSlip(F_Ed);
+        
+        // Utilizzo
+        const utilization = F_Rd_total > 0 ? (F_Ed / F_Rd_total) : Infinity;
+        
+        // Fattore di sicurezza
+        const safety_factor = F_Ed > 0 ? (F_Rd_total / F_Ed) : Infinity;
+        
+        // Status
+        let status = 'OK';
+        if (utilization > 1.0) {
+            status = 'CRITICO';
+        } else if (utilization > 0.9) {
+            status = 'ATTENZIONE';
+        } else if (utilization > 0.8) {
+            status = 'VERIFICA';
+        }
+        
+        // Verifica slip
+        let slip_status = 'OK';
+        if (slip > COUPLING_CONSTANTS.slip_limit_ultimate) {
+            slip_status = 'CRITICO';
+        } else if (slip > COUPLING_CONSTANTS.slip_limit_serviceability) {
+            slip_status = 'ATTENZIONE';
+        }
+        
+        this.results = {
+            // Resistenze
+            F_Rd_total: F_Rd_total,
+            F_Rd_adhesive: adhesiveRes.F_Rd,
+            F_Rd_fasteners: fastenersRes.F_Rd,
+            F_Rd_ft: ftRes.F_Rd,
+            
+            // Contributi percentuali
+            contribution_adhesive: F_Rd_total > 0 ? (adhesiveRes.F_Rd / F_Rd_total * 100) : 0,
+            contribution_fasteners: F_Rd_total > 0 ? (fastenersRes.F_Rd / F_Rd_total * 100) : 0,
+            contribution_ft: F_Rd_total > 0 ? (ftRes.F_Rd / F_Rd_total * 100) : 0,
+            
+            // Dettagli adesivo
+            adhesive: adhesiveRes,
+            
+            // Dettagli fissaggi
+            fasteners: fastenersRes,
+            
+            // Dettagli Ft
+            ft: ftRes,
+            
+            // Rigidezza e scorrimento
+            k_interface: k_interface,
+            slip: slip,
+            slip_status: slip_status,
+            
+            // Verifica
+            F_Ed: F_Ed,
+            utilization: utilization,
+            utilization_percent: utilization * 100,
+            safety_factor: safety_factor,
+            status: status,
+            
+            // Metodi attivi
+            methods_active: {
+                adhesive: this.adhesive_enabled,
+                fasteners: this.fasteners_enabled,
+                ft: this.ft_enabled
+            }
+        };
+        
+        return this.results;
+    }
+    
+    /**
+     * Genera elementi di interfaccia per analisi locale
+     * @param {number} num_elements - Numero di elementi
+     * @returns {Array<InterfaceElement>} Array di elementi
+     */
+    generateInterfaceElements(num_elements = 10) {
+        this.interface_elements = [];
+        const dx = this.overlap_length / num_elements;
+        const k_total = this.calculateInterfaceStiffness();
+        const k_per_element = k_total / num_elements;
+        
+        for (let i = 0; i < num_elements; i++) {
+            const elem = new InterfaceElement({
+                x: i * dx + dx / 2,
+                length: dx,
+                width: this.overlap_width,
+                k_local: k_per_element
+            });
+            this.interface_elements.push(elem);
+        }
+        
+        return this.interface_elements;
+    }
+}
+
+/**
+ * Funzione helper per calcolo rapido delle forze di interfaccia
+ * @param {Object} geometry - {overlap_length, overlap_width}
+ * @param {Object} methods - {adhesive: {type, thickness}, fasteners: {type, count}, ft: value}
+ * @param {number} F_Ed - Forza di progetto (N)
+ * @returns {Object} Risultati analisi
+ */
+function calculateInterfaceForces(geometry, methods, F_Ed) {
+    const analysis = new CouplingAnalysis({
+        overlap_length: geometry.overlap_length,
+        overlap_width: geometry.overlap_width
+    });
+    
+    if (methods.adhesive) {
+        analysis.enableAdhesive(true, methods.adhesive);
+    }
+    
+    if (methods.fasteners) {
+        analysis.enableFasteners(true, methods.fasteners);
+    }
+    
+    if (methods.ft !== undefined && methods.ft > 0) {
+        analysis.enableFt(true, methods.ft);
+    }
+    
+    return analysis.analyze(F_Ed);
+}
+
+// ============================================================================
 // ESPORTAZIONE GLOBALE (per uso in browser)
 // ============================================================================
 if (typeof window !== 'undefined') {
@@ -2106,4 +2615,11 @@ if (typeof window !== 'undefined') {
     window.NOTCH_CONSTANTS = NOTCH_CONSTANTS;
     window.calculateKt = calculateKt;
     window.calculateHoleReduction = calculateHoleReduction;
+    
+    // Coupling module exports
+    window.COUPLING_CONSTANTS = COUPLING_CONSTANTS;
+    window.ADHESIVES_DB = ADHESIVES_DB;
+    window.CouplingAnalysis = CouplingAnalysis;
+    window.InterfaceElement = InterfaceElement;
+    window.calculateInterfaceForces = calculateInterfaceForces;
 }
