@@ -494,6 +494,205 @@
 
             <hr class="border-neutral-200">
 
+            <!-- ACCOPPIAMENTO SPALLA-PROFILO -->
+            <div class="bg-purple-50 p-3 rounded-lg border border-purple-200 space-y-3">
+                <div class="flex items-center gap-2 font-bold text-sm text-purple-800 border-b border-purple-200 pb-1 mb-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"/></svg>
+                    Accoppiamento Spalla-Profilo
+                </div>
+
+                <!-- Toggle Colla Strutturale -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between bg-purple-100 p-2 rounded border border-purple-200">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-purple-800 uppercase">Colla Strutturale</span>
+                            <span class="text-[9px] text-purple-600">Adesivo epossidico/acrilico</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="input-coupling-adhesive" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+                    <!-- Controlli Colla (nascosti di default) -->
+                    <div id="controls-adhesive" class="hidden space-y-2 pl-2 border-l-2 border-purple-300">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-bold text-purple-700 uppercase">Tipo Adesivo</label>
+                            <select id="input-adhesive-type" class="w-full p-1.5 border rounded text-[10px] bg-white border-purple-200 text-purple-900 font-medium outline-none focus:ring-1 focus:ring-purple-400">
+                                <optgroup label="Epossidici">
+                                    <option value="epoxy-standard" selected>Epossidico Standard (τ=15 MPa)</option>
+                                    <option value="epoxy-high-strength">Epossidico Alta Resistenza (τ=25 MPa)</option>
+                                    <option value="epoxy-flexible">Epossidico Flessibile (τ=12 MPa)</option>
+                                </optgroup>
+                                <optgroup label="Acrilici">
+                                    <option value="acrylic-structural">Acrilico Strutturale (τ=18 MPa)</option>
+                                    <option value="acrylic-methacrylate">Metacrilato Modificato (τ=20 MPa)</option>
+                                </optgroup>
+                                <optgroup label="Altri">
+                                    <option value="polyurethane-structural">Poliuretanico Strutturale (τ=10 MPa)</option>
+                                    <option value="tape-vhb">Nastro VHB (τ=8 MPa)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-purple-700">Spessore Adesivo</label>
+                                <span id="val-adhesive-thickness" class="text-[9px] font-bold text-purple-900 bg-purple-100 px-1 rounded">0.5 mm</span>
+                            </div>
+                            <input type="range" id="input-adhesive-thickness" min="0.1" max="1.0" step="0.1" value="0.5" class="w-full h-1 bg-purple-200 rounded accent-purple-600">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toggle Fissaggi Meccanici -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between bg-purple-100 p-2 rounded border border-purple-200">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-purple-800 uppercase">Fissaggi Meccanici</span>
+                            <span class="text-[9px] text-purple-600">Viti o rivetti</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="input-coupling-fasteners" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+                    <!-- Controlli Fissaggi (nascosti di default) -->
+                    <div id="controls-fasteners-coupling" class="hidden space-y-2 pl-2 border-l-2 border-purple-300">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-bold text-purple-700 uppercase">Tipo Fissaggio</label>
+                            <select id="input-coupling-fastener-type" class="w-full p-1.5 border rounded text-[10px] bg-white border-purple-200 text-purple-900 font-medium outline-none focus:ring-1 focus:ring-purple-400">
+                                <optgroup label="Viti">
+                                    <option value="screw-m3">Vite M3 (F_v=2.4 kN)</option>
+                                    <option value="screw-m4" selected>Vite M4 (F_v=4.2 kN)</option>
+                                    <option value="screw-m5">Vite M5 (F_v=6.6 kN)</option>
+                                    <option value="screw-m6">Vite M6 (F_v=9.5 kN)</option>
+                                </optgroup>
+                                <optgroup label="Rivetti">
+                                    <option value="rivet-3">Rivetto Ø3.2 (F_v=1.8 kN)</option>
+                                    <option value="rivet-4">Rivetto Ø4.0 (F_v=2.8 kN)</option>
+                                    <option value="rivet-5">Rivetto Ø4.8 (F_v=4.0 kN)</option>
+                                    <option value="rivet-6">Rivetto Ø6.4 (F_v=7.1 kN)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-purple-700">Numero Fissaggi</label>
+                                <span id="val-coupling-num-fasteners" class="text-[9px] font-bold text-purple-900 bg-purple-100 px-1 rounded">3</span>
+                            </div>
+                            <input type="range" id="input-coupling-num-fasteners" min="1" max="10" step="1" value="3" class="w-full h-1 bg-purple-200 rounded accent-purple-600">
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-purple-700">Passo Fissaggi</label>
+                                <span id="val-coupling-fastener-spacing" class="text-[9px] font-bold text-purple-900 bg-purple-100 px-1 rounded">100 mm</span>
+                            </div>
+                            <input type="range" id="input-coupling-fastener-spacing" min="10" max="200" step="5" value="100" class="w-full h-1 bg-purple-200 rounded accent-purple-600">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toggle Forza Tangenziale Ft -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between bg-purple-100 p-2 rounded border border-purple-200">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-purple-800 uppercase">Forza Tangenziale Ft</span>
+                            <span class="text-[9px] text-purple-600">Input manuale forza</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="input-coupling-ft" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+                    <!-- Controlli Ft (nascosti di default) -->
+                    <div id="controls-ft" class="hidden space-y-2 pl-2 border-l-2 border-purple-300">
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label class="text-[9px] font-bold text-purple-700">Ft Manuale</label>
+                                <span id="val-coupling-ft" class="text-[9px] font-bold text-white bg-purple-600 px-1.5 rounded">0 N</span>
+                            </div>
+                            <input type="range" id="input-coupling-ft-manual" min="0" max="10000" step="100" value="0" class="w-full h-1 bg-purple-200 rounded accent-purple-600">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Riepilogo Accoppiamento -->
+                <div class="bg-white p-2 rounded border border-purple-200 space-y-2 mt-2">
+                    <div class="text-[9px] font-bold text-purple-700 uppercase border-b border-purple-200 pb-1">Riepilogo Accoppiamento</div>
+                    
+                    <!-- Barre Contributo -->
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-1 text-[8px]">
+                            <span class="w-12 text-purple-600">Colla:</span>
+                            <div class="flex-1 h-2 bg-purple-100 rounded overflow-hidden">
+                                <div id="bar-adhesive" class="h-full bg-purple-500 transition-all" style="width: 0%"></div>
+                            </div>
+                            <span id="val-bar-adhesive" class="w-10 text-right font-mono text-purple-900">0%</span>
+                        </div>
+                        <div class="flex items-center gap-1 text-[8px]">
+                            <span class="w-12 text-purple-600">Fissaggi:</span>
+                            <div class="flex-1 h-2 bg-purple-100 rounded overflow-hidden">
+                                <div id="bar-fasteners" class="h-full bg-indigo-500 transition-all" style="width: 0%"></div>
+                            </div>
+                            <span id="val-bar-fasteners" class="w-10 text-right font-mono text-purple-900">0%</span>
+                        </div>
+                        <div class="flex items-center gap-1 text-[8px]">
+                            <span class="w-12 text-purple-600">Ft:</span>
+                            <div class="flex-1 h-2 bg-purple-100 rounded overflow-hidden">
+                                <div id="bar-ft" class="h-full bg-pink-500 transition-all" style="width: 0%"></div>
+                            </div>
+                            <span id="val-bar-ft" class="w-10 text-right font-mono text-purple-900">0%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Valori Numerici -->
+                    <div class="grid grid-cols-2 gap-1 text-[8px] pt-1 border-t border-purple-100">
+                        <div class="bg-purple-50 p-1 rounded">
+                            <span class="text-purple-600">Ft,Rd:</span>
+                            <span id="val-coupling-ft-rd" class="font-mono font-bold text-purple-900">0</span>
+                            <span class="text-purple-500">N</span>
+                        </div>
+                        <div class="bg-purple-50 p-1 rounded">
+                            <span class="text-purple-600">Ft,Ed:</span>
+                            <span id="val-coupling-ft-ed" class="font-mono font-bold text-purple-900">0</span>
+                            <span class="text-purple-500">N</span>
+                        </div>
+                        <div class="bg-purple-50 p-1 rounded">
+                            <span class="text-purple-600">Rigidezza:</span>
+                            <span id="val-coupling-stiffness" class="font-mono font-bold text-purple-900">0</span>
+                            <span class="text-purple-500">N/mm</span>
+                        </div>
+                        <div class="bg-purple-50 p-1 rounded">
+                            <span class="text-purple-600">Slip:</span>
+                            <span id="val-coupling-slip" class="font-mono font-bold text-purple-900">0.00</span>
+                            <span class="text-purple-500">mm</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Utilizzo e Stato -->
+                    <div class="space-y-1 pt-1 border-t border-purple-100">
+                        <div class="flex items-center gap-1 text-[8px]">
+                            <span class="text-purple-600">Utilizzo:</span>
+                            <div class="flex-1 h-3 bg-gray-200 rounded overflow-hidden">
+                                <div id="bar-utilization" class="h-full bg-green-500 transition-all" style="width: 0%"></div>
+                            </div>
+                            <span id="val-coupling-utilization" class="w-10 text-right font-mono font-bold text-purple-900">0%</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-1">
+                                <span class="text-[8px] text-purple-600">Stato:</span>
+                                <span id="badge-coupling-status" class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-gray-200 text-gray-600">--</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <span class="text-[8px] text-purple-600">SF:</span>
+                                <span id="val-coupling-sf" class="text-[9px] font-mono font-bold text-green-700">∞</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-neutral-200">
+
             <!-- GLOBALI -->
             <div class="space-y-3">
                 <div class="flex justify-between">
@@ -615,6 +814,8 @@
 
     <!-- MOTORE FEM v4.0 - Classi avanzate per analisi fori (caricato PRIMA del codice inline) -->
     <script src="fem_engine_v4.js"></script>
+    <!-- Modulo Accoppiamento Spalla-Profilo -->
+    <script src="coupling_module.js"></script>
     
     <script>
         const MATERIALS = {
@@ -654,7 +855,12 @@
             numBolts: 3, beamMatKey: '6061-T6', insertMatKey: '46100-F', porosity: 0, scaleFactor: 1,
             customProfile: null, customInsertProfile: null, previewMode: 'beam', beamShape: 'rect', insertShape: 'solid',
             autoFit: true, filletRadius: 4.0, ledGroove: false, temperature: 20,
-            fastenerType: 'screw-m3', fastenerDiameter: 3.2, holeSpacing: 50
+            fastenerType: 'screw-m3', fastenerDiameter: 3.2, holeSpacing: 50,
+            // Coupling state (Accoppiamento Spalla-Profilo)
+            couplingAdhesive: false, couplingFasteners: false, couplingFt: false,
+            adhesiveType: 'epoxy-standard', adhesiveThickness: 0.5,
+            couplingFastenerType: 'screw-m4', couplingNumFasteners: 3, couplingFastenerSpacing: 100,
+            couplingFtManual: 0
         };
 
         const CONSTANTS = { 
@@ -684,7 +890,17 @@
                 insertFlange: document.getElementById('input-insert-flange'), insertWeb: document.getElementById('input-insert-web'), insertWall: document.getElementById('input-insert-wall'), insertRib: document.getElementById('input-insert-rib'),
                 insertFlangeC: document.getElementById('input-insert-flange-c'), insertWebC: document.getElementById('input-insert-web-c'), insertWallC: document.getElementById('input-insert-wall-c'), insertRadiusInternal: document.getElementById('input-insert-radius-internal'),
                 temperature: document.getElementById('input-temperature'),
-                fastenerType: document.getElementById('input-fastener-type'), fastenerDiameter: document.getElementById('input-fastener-diameter')
+                fastenerType: document.getElementById('input-fastener-type'), fastenerDiameter: document.getElementById('input-fastener-diameter'),
+                // Coupling inputs
+                couplingAdhesive: document.getElementById('input-coupling-adhesive'),
+                couplingFasteners: document.getElementById('input-coupling-fasteners'),
+                couplingFt: document.getElementById('input-coupling-ft'),
+                adhesiveType: document.getElementById('input-adhesive-type'),
+                adhesiveThickness: document.getElementById('input-adhesive-thickness'),
+                couplingFastenerType: document.getElementById('input-coupling-fastener-type'),
+                couplingNumFasteners: document.getElementById('input-coupling-num-fasteners'),
+                couplingFastenerSpacing: document.getElementById('input-coupling-fastener-spacing'),
+                couplingFtManual: document.getElementById('input-coupling-ft-manual')
             },
             controls: {
                 btnMass: document.getElementById('btn-mode-mass'), btnPulley: document.getElementById('btn-mode-pulley'),
@@ -692,7 +908,11 @@
                 manualGeom: document.getElementById('manual-geometry-controls'), profileInfo: document.getElementById('custom-beam-info'), btnClearSvg: document.getElementById('btn-clear-svg-beam'),
                 manualInsert: document.getElementById('manual-insert-controls'), insertProfileInfo: document.getElementById('custom-insert-info'), btnClearSvgInsert: document.getElementById('btn-clear-svg-insert'),
                 btnPreviewBeam: document.getElementById('btn-preview-beam'), btnPreviewInsert: document.getElementById('btn-preview-insert'),
-                advInsertControls: document.getElementById('advanced-insert-controls'), fieldsIbeam: document.getElementById('fields-ibeam'), fieldsXrib: document.getElementById('fields-xrib'), fieldsCChannel: document.getElementById('fields-c-channel')
+                advInsertControls: document.getElementById('advanced-insert-controls'), fieldsIbeam: document.getElementById('fields-ibeam'), fieldsXrib: document.getElementById('fields-xrib'), fieldsCChannel: document.getElementById('fields-c-channel'),
+                // Coupling controls panels
+                controlsAdhesive: document.getElementById('controls-adhesive'),
+                controlsFastenersCoupling: document.getElementById('controls-fasteners-coupling'),
+                controlsFt: document.getElementById('controls-ft')
             },
             displays: {
                 mass: document.getElementById('val-mass'), massResidual: document.getElementById('val-mass-residual'),
@@ -717,7 +937,26 @@
                 valTemperature: document.getElementById('val-temperature'),
                 valFastenerDiameter: document.getElementById('val-fastener-diameter'), valAreaReductionBeam: document.getElementById('val-area-reduction-beam'), valAreaReductionInsert: document.getElementById('val-area-reduction-insert'),
                 valKtEffective: document.getElementById('val-kt-effective'), valKfFatigue: document.getElementById('val-kf-fatigue'), 
-                valSigmaLocal: document.getElementById('val-sigma-local'), valBearingUtil: document.getElementById('val-bearing-util'), valFatigueSf: document.getElementById('val-fatigue-sf')
+                valSigmaLocal: document.getElementById('val-sigma-local'), valBearingUtil: document.getElementById('val-bearing-util'), valFatigueSf: document.getElementById('val-fatigue-sf'),
+                // Coupling displays
+                valAdhesiveThickness: document.getElementById('val-adhesive-thickness'),
+                valCouplingNumFasteners: document.getElementById('val-coupling-num-fasteners'),
+                valCouplingFastenerSpacing: document.getElementById('val-coupling-fastener-spacing'),
+                valCouplingFt: document.getElementById('val-coupling-ft'),
+                barAdhesive: document.getElementById('bar-adhesive'),
+                barFasteners: document.getElementById('bar-fasteners'),
+                barFt: document.getElementById('bar-ft'),
+                valBarAdhesive: document.getElementById('val-bar-adhesive'),
+                valBarFasteners: document.getElementById('val-bar-fasteners'),
+                valBarFt: document.getElementById('val-bar-ft'),
+                valCouplingFtRd: document.getElementById('val-coupling-ft-rd'),
+                valCouplingFtEd: document.getElementById('val-coupling-ft-ed'),
+                valCouplingStiffness: document.getElementById('val-coupling-stiffness'),
+                valCouplingSlip: document.getElementById('val-coupling-slip'),
+                barUtilization: document.getElementById('bar-utilization'),
+                valCouplingUtilization: document.getElementById('val-coupling-utilization'),
+                badgeCouplingStatus: document.getElementById('badge-coupling-status'),
+                valCouplingSf: document.getElementById('val-coupling-sf')
             },
             svgLayers: {
                 grid: document.getElementById('grid-layer'), support: document.getElementById('support-layer'), residual: document.getElementById('residual-layer'),
@@ -2375,6 +2614,230 @@
                 }
             });
         }
+
+        // ============================================================================
+        // COUPLING MODULE - Event Listeners e Logica UI
+        // ============================================================================
+        
+        /**
+         * Aggiorna la visibilità dei pannelli di controllo coupling
+         */
+        function updateCouplingControlsVisibility() {
+            // Toggle pannello Colla
+            if (ui.controls.controlsAdhesive) {
+                ui.controls.controlsAdhesive.classList.toggle('hidden', !state.couplingAdhesive);
+            }
+            // Toggle pannello Fissaggi
+            if (ui.controls.controlsFastenersCoupling) {
+                ui.controls.controlsFastenersCoupling.classList.toggle('hidden', !state.couplingFasteners);
+            }
+            // Toggle pannello Ft
+            if (ui.controls.controlsFt) {
+                ui.controls.controlsFt.classList.toggle('hidden', !state.couplingFt);
+            }
+        }
+        
+        /**
+         * Esegue l'analisi di accoppiamento e aggiorna l'UI
+         */
+        function updateCouplingAnalysis() {
+            // Verifica che il modulo CouplingAnalysis sia disponibile
+            if (typeof CouplingAnalysis === 'undefined') {
+                console.warn('CouplingAnalysis non disponibile');
+                return;
+            }
+            
+            // Leggi stato coupling dagli input
+            state.couplingAdhesive = ui.inputs.couplingAdhesive ? ui.inputs.couplingAdhesive.checked : false;
+            state.couplingFasteners = ui.inputs.couplingFasteners ? ui.inputs.couplingFasteners.checked : false;
+            state.couplingFt = ui.inputs.couplingFt ? ui.inputs.couplingFt.checked : false;
+            state.adhesiveType = ui.inputs.adhesiveType ? ui.inputs.adhesiveType.value : 'epoxy-standard';
+            state.adhesiveThickness = ui.inputs.adhesiveThickness ? parseFloat(ui.inputs.adhesiveThickness.value) : 0.5;
+            state.couplingFastenerType = ui.inputs.couplingFastenerType ? ui.inputs.couplingFastenerType.value : 'screw-m4';
+            state.couplingNumFasteners = ui.inputs.couplingNumFasteners ? parseInt(ui.inputs.couplingNumFasteners.value) : 3;
+            state.couplingFastenerSpacing = ui.inputs.couplingFastenerSpacing ? parseFloat(ui.inputs.couplingFastenerSpacing.value) : 100;
+            state.couplingFtManual = ui.inputs.couplingFtManual ? parseFloat(ui.inputs.couplingFtManual.value) : 0;
+            
+            // Aggiorna visibilità pannelli
+            updateCouplingControlsVisibility();
+            
+            // Aggiorna display valori slider
+            if (ui.displays.valAdhesiveThickness) {
+                ui.displays.valAdhesiveThickness.textContent = state.adhesiveThickness.toFixed(1) + ' mm';
+            }
+            if (ui.displays.valCouplingNumFasteners) {
+                ui.displays.valCouplingNumFasteners.textContent = state.couplingNumFasteners;
+            }
+            if (ui.displays.valCouplingFastenerSpacing) {
+                ui.displays.valCouplingFastenerSpacing.textContent = state.couplingFastenerSpacing + ' mm';
+            }
+            if (ui.displays.valCouplingFt) {
+                ui.displays.valCouplingFt.textContent = state.couplingFtManual + ' N';
+            }
+            
+            // Calcola forza tangenziale dalla geometria corrente
+            // Ft_Ed = M / (Lp/2) dove M = F × braccio
+            const appliedLoad = state.mode === 'mass' ? state.mass * CONSTANTS.g : state.pulleyForce;
+            const beamLength_m = state.length;
+            const penetration_m = state.penetration / 100;  // cm -> m
+            const distWall_m = state.distWall / 100;        // cm -> m
+            
+            // Calcola forze all'interfaccia
+            let interfaceForces = { Ft: 0, Fn: 0 };
+            if (typeof calculateInterfaceForces !== 'undefined') {
+                interfaceForces = calculateInterfaceForces({
+                    appliedLoad: appliedLoad,
+                    beamLength: beamLength_m,
+                    penetration: penetration_m,
+                    distanceFromWall: distWall_m,
+                    loadType: state.mode === 'mass' ? 'point' : 'pulley'
+                });
+            }
+            
+            // Determina Ft_Ed da usare
+            const Ft_Ed = state.couplingFt ? state.couplingFtManual : interfaceForces.Ft;
+            
+            // Crea istanza CouplingAnalysis
+            const couplingAnalysis = new CouplingAnalysis({
+                interfaceLength: state.penetration * 10,    // cm -> mm
+                interfaceWidth: state.width * 10,           // cm -> mm
+                enableAdhesive: state.couplingAdhesive,
+                enableFasteners: state.couplingFasteners,
+                enableFt: state.couplingFt,
+                adhesiveType: state.adhesiveType,
+                adhesiveThickness: state.adhesiveThickness,
+                fastenerType: state.couplingFastenerType,
+                numFasteners: state.couplingNumFasteners,
+                fastenerSpacing: state.couplingFastenerSpacing,
+                Ft_Ed: Ft_Ed,
+                Ft_manual: state.couplingFtManual
+            });
+            
+            // Esegui verifica
+            const result = couplingAnalysis.verify(Ft_Ed);
+            
+            // Aggiorna UI con risultati
+            updateCouplingUI(result);
+        }
+        
+        /**
+         * Aggiorna l'interfaccia con i risultati dell'analisi coupling
+         * @param {Object} result - Risultati da CouplingAnalysis.verify()
+         */
+        function updateCouplingUI(result) {
+            if (!result) return;
+            
+            // Barre contributo (percentuali)
+            const totalContrib = result.adhesiveContribution + result.fastenersContribution + result.ftContribution;
+            const adhesivePercent = totalContrib > 0 ? (result.adhesiveContribution / totalContrib) * 100 : 0;
+            const fastenersPercent = totalContrib > 0 ? (result.fastenersContribution / totalContrib) * 100 : 0;
+            const ftPercent = totalContrib > 0 ? (result.ftContribution / totalContrib) * 100 : 0;
+            
+            if (ui.displays.barAdhesive) ui.displays.barAdhesive.style.width = adhesivePercent + '%';
+            if (ui.displays.barFasteners) ui.displays.barFasteners.style.width = fastenersPercent + '%';
+            if (ui.displays.barFt) ui.displays.barFt.style.width = ftPercent + '%';
+            if (ui.displays.valBarAdhesive) ui.displays.valBarAdhesive.textContent = adhesivePercent.toFixed(0) + '%';
+            if (ui.displays.valBarFasteners) ui.displays.valBarFasteners.textContent = fastenersPercent.toFixed(0) + '%';
+            if (ui.displays.valBarFt) ui.displays.valBarFt.textContent = ftPercent.toFixed(0) + '%';
+            
+            // Valori numerici
+            if (ui.displays.valCouplingFtRd) ui.displays.valCouplingFtRd.textContent = result.Ft_Rd.toFixed(0);
+            if (ui.displays.valCouplingFtEd) ui.displays.valCouplingFtEd.textContent = result.Ft_Ed.toFixed(0);
+            if (ui.displays.valCouplingStiffness) {
+                const stiffnessFormatted = result.totalStiffness > 1e6 
+                    ? (result.totalStiffness / 1e6).toFixed(1) + 'M' 
+                    : (result.totalStiffness / 1e3).toFixed(1) + 'k';
+                ui.displays.valCouplingStiffness.textContent = stiffnessFormatted;
+            }
+            if (ui.displays.valCouplingSlip) ui.displays.valCouplingSlip.textContent = result.slip.toFixed(3);
+            
+            // Barra e valore utilizzo
+            const utilizationClamped = Math.min(100, result.utilizationPercent);
+            if (ui.displays.barUtilization) {
+                ui.displays.barUtilization.style.width = utilizationClamped + '%';
+                // Colore barra in base allo stato
+                let barColor = 'bg-green-500';
+                if (result.status === 'ATTENZIONE') barColor = 'bg-yellow-500';
+                else if (result.status === 'CRITICO') barColor = 'bg-red-500';
+                else if (result.status === 'OK') barColor = 'bg-blue-500';
+                ui.displays.barUtilization.className = 'h-full transition-all ' + barColor;
+            }
+            if (ui.displays.valCouplingUtilization) {
+                ui.displays.valCouplingUtilization.textContent = result.utilizationPercent.toFixed(0) + '%';
+            }
+            
+            // Badge stato
+            if (ui.displays.badgeCouplingStatus) {
+                const statusClasses = {
+                    'OTTIMO': 'bg-green-100 text-green-700',
+                    'OK': 'bg-blue-100 text-blue-700',
+                    'ATTENZIONE': 'bg-yellow-100 text-yellow-700',
+                    'CRITICO': 'bg-red-100 text-red-700 animate-pulse'
+                };
+                const baseClass = 'px-1.5 py-0.5 rounded text-[8px] font-bold ';
+                ui.displays.badgeCouplingStatus.className = baseClass + (statusClasses[result.status] || 'bg-gray-200 text-gray-600');
+                ui.displays.badgeCouplingStatus.textContent = result.status || '--';
+            }
+            
+            // Fattore di sicurezza
+            if (ui.displays.valCouplingSf) {
+                if (result.SF === Infinity || result.SF > 99) {
+                    ui.displays.valCouplingSf.textContent = '∞';
+                    ui.displays.valCouplingSf.className = 'text-[9px] font-mono font-bold text-green-700';
+                } else {
+                    ui.displays.valCouplingSf.textContent = result.SF.toFixed(2);
+                    if (result.SF < 1.0) {
+                        ui.displays.valCouplingSf.className = 'text-[9px] font-mono font-bold text-red-600';
+                    } else if (result.SF < 1.5) {
+                        ui.displays.valCouplingSf.className = 'text-[9px] font-mono font-bold text-yellow-600';
+                    } else {
+                        ui.displays.valCouplingSf.className = 'text-[9px] font-mono font-bold text-green-700';
+                    }
+                }
+            }
+        }
+        
+        // Event listeners per toggle coupling
+        if (ui.inputs.couplingAdhesive) {
+            ui.inputs.couplingAdhesive.addEventListener('change', () => {
+                updateCouplingAnalysis();
+                update();
+            });
+        }
+        if (ui.inputs.couplingFasteners) {
+            ui.inputs.couplingFasteners.addEventListener('change', () => {
+                updateCouplingAnalysis();
+                update();
+            });
+        }
+        if (ui.inputs.couplingFt) {
+            ui.inputs.couplingFt.addEventListener('change', () => {
+                updateCouplingAnalysis();
+                update();
+            });
+        }
+        
+        // Event listeners per controlli coupling
+        const couplingInputs = [
+            'adhesiveType', 'adhesiveThickness', 
+            'couplingFastenerType', 'couplingNumFasteners', 'couplingFastenerSpacing',
+            'couplingFtManual'
+        ];
+        couplingInputs.forEach(inputName => {
+            const input = ui.inputs[inputName];
+            if (input) {
+                input.addEventListener(input.type === 'range' ? 'input' : 'change', () => {
+                    updateCouplingAnalysis();
+                });
+            }
+        });
+        
+        // Aggancia aggiornamento coupling all'update generale
+        const originalUpdate = update;
+        update = function() {
+            originalUpdate();
+            updateCouplingAnalysis();
+        };
 
         // Grid Init
         const grid = ui.svgLayers.grid;
