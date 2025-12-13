@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calcolatore Sezione SVG (Dual Slot + Move)</title>
+    <title>Calcolatore Sezione SVG & Integrazione FEM (v6.5 Enhanced)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
@@ -56,11 +56,16 @@
     <div class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
         <div class="bg-slate-800 p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
-                <h1 class="text-2xl font-bold">Analisi Sezione SVG & Editor</h1>
-                <p class="text-slate-300 text-sm mt-1">Engine V6.4: Database Leghe Alluminio Esteso</p>
+                <h1 class="text-2xl font-bold">Analisi Sezione SVG & Editor FEM</h1>
+                <p class="text-slate-300 text-sm mt-1">Engine V6.5 Enhanced: Integrazione FEM v4.1 + Database Leghe Alluminio Esteso</p>
             </div>
-            <div class="mt-4 md:mt-0 bg-indigo-600 px-4 py-2 rounded text-xs font-bold text-white shadow-sm border border-indigo-400">
-                DB UPDATED
+            <div class="mt-4 md:mt-0 flex gap-2">
+                <div class="bg-indigo-600 px-4 py-2 rounded text-xs font-bold text-white shadow-sm border border-indigo-400">
+                    FEM v4.1
+                </div>
+                <button id="btnShowDocs" class="bg-green-600 px-4 py-2 rounded text-xs font-bold text-white shadow-sm border border-green-400 hover:bg-green-700">
+                    📖 Documentazione
+                </button>
             </div>
         </div>
 
@@ -70,8 +75,8 @@
                 
                 <!-- SLOT A -->
                 <div class="bg-slate-50 p-4 rounded-lg border-l-4 border-blue-500 shadow-sm relative">
-                    <div class="absolute top-2 right-2 text-xs font-bold text-blue-500">SEZIONE A</div>
-                    <h2 class="font-bold text-slate-700 mb-3 text-sm">Carica File A</h2>
+                    <div class="absolute top-2 right-2 text-xs font-bold text-blue-500">SEZIONE A (Profilo)</div>
+                    <h2 class="font-bold text-slate-700 mb-3 text-sm">Carica File SVG A</h2>
                     <input type="file" id="fileInput1" accept=".svg" class="block w-full text-xs text-slate-500 mb-2 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer"/>
                     
                     <div class="grid grid-cols-2 gap-2 mb-2">
@@ -836,6 +841,274 @@
         // --- PARSING & SPLITTING ---
         function convertToPathD(el){const t=el.tagName.toLowerCase();if(t==='path')return el.getAttribute('d');if(t==='rect'){const x=parseFloat(el.getAttribute('x'))||0,y=parseFloat(el.getAttribute('y'))||0,w=parseFloat(el.getAttribute('width')),h=parseFloat(el.getAttribute('height'));return`M ${x} ${y} h ${w} v ${h} h ${-w} Z`}if(t==='circle'){const cx=parseFloat(el.getAttribute('cx'))||0,cy=parseFloat(el.getAttribute('cy'))||0,r=parseFloat(el.getAttribute('r'));return`M ${cx-r} ${cy} a ${r} ${r} 0 1 0 ${2*r} 0 a ${r} ${r} 0 1 0 ${-2*r} 0`}if(t==='polygon'||t==='polyline'){let p=el.getAttribute('points');if(!p)return null;return"M "+p.trim().replace(/[\s,]+/g,' ')+(t==='polygon'?" Z":"");}return null;}
         function getContoursBySplitting(element,samples=500){let fullPathD=element.tagName.toLowerCase()!=='path'?convertToPathD(element):element.getAttribute('d');if(!fullPathD)return[];const subStrings=fullPathD.split(/(?=[Mm])/).filter(s=>s.trim().length>0);const contours=[];const container=document.getElementById('svgHiddenContainer');const tr=element.getAttribute('transform');subStrings.forEach(dStr=>{const temp=document.createElementNS("http://www.w3.org/2000/svg","path");temp.setAttribute('d',dStr);if(tr)temp.setAttribute('transform',tr);container.appendChild(temp);let len=0;try{len=temp.getTotalLength()}catch(e){}let ctm=null;try{ctm=temp.getCTM()}catch(e){}if(len>0.1){const pts=[];const step=len/samples;for(let i=0;i<=len;i+=step){let pt=temp.getPointAtLength(i);if(ctm)pt=pt.matrixTransform(ctm);pts.push({x:pt.x,y:pt.y})}let pt0=temp.getPointAtLength(0);if(ctm)pt0=pt0.matrixTransform(ctm);pts.push({x:pt0.x,y:pt0.y});contours.push(pts)}container.removeChild(temp)});return contours;}
+        
+        // ==========================================================================
+        // FEM INTEGRATION v4.1 - Integrazione con fem_engine_v4.js
+        // ==========================================================================
+        /**
+         * Genera dati sezione compatibili con BeamSectionWithHoles da fem_engine_v4.js
+         * Permette di esportare le proprietà calcolate per l'analisi FEM
+         */
+        function exportToFEM(slotId) {
+            const sec = appState.sections[slotId];
+            if (!sec.loaded || !sec.props) {
+                log(`Slot ${slotId}: Impossibile esportare - sezione non caricata`, 'error');
+                return null;
+            }
+            
+            const p = sec.props;
+            const u = document.getElementById('unitSelect'+slotId).value;
+            const scale = parseFloat(document.getElementById('scaleInput'+slotId).value) || 1.0;
+            const matSelect = document.getElementById('materialSelect'+slotId);
+            const temperSelect = document.getElementById('temperSelect'+slotId);
+            
+            if (!matSelect || !temperSelect) {
+                log(`Slot ${slotId}: Selettori materiale non trovati`, 'error');
+                return null;
+            }
+            
+            const [group, alloy] = matSelect.value.split(':');
+            const material = materialsDB[group].alloys[alloy];
+            const temper = temperSelect.value;
+            const temperData = material.tempers[temper];
+            
+            // Conversione unità -> metri
+            let conversionFactor = 1;
+            if (u === 'mm') conversionFactor = 0.001;
+            else if (u === 'cm') conversionFactor = 0.01;
+            else if (u === 'in') conversionFactor = 0.0254;
+            
+            // Stima dimensioni sezione da bounds
+            const width_m = (sec.bounds.maxX - sec.bounds.minX) * scale * conversionFactor;
+            const height_m = (sec.bounds.maxY - sec.bounds.minY) * scale * conversionFactor;
+            
+            // Stima spessori (approssimazione basata su min_wall_thickness se disponibile)
+            const minWall = p.min_wall_thickness ? p.min_wall_thickness * scale * conversionFactor : width_m * 0.1;
+            
+            const femData = {
+                // Proprietà geometriche
+                width: width_m,
+                height: height_m,
+                t_v: minWall,
+                t_h: minWall,
+                area: p.area * Math.pow(conversionFactor * scale, 2),
+                inertia_Ixx: p.inertia_centroid.Ixx * Math.pow(conversionFactor * scale, 4),
+                inertia_Iyy: p.inertia_centroid.Iyy * Math.pow(conversionFactor * scale, 4),
+                centroid: {
+                    x: p.centroid.x * conversionFactor * scale,
+                    y: p.centroid.y * conversionFactor * scale
+                },
+                
+                // Proprietà materiale
+                materialKey: `${alloy}-${temper}`,
+                material: {
+                    name: material.name,
+                    density: material.density,
+                    E: material.young_modulus_gpa,
+                    yield: parseFloat(temperData.yield.replace(' MPa', '')),
+                    tensile: parseFloat(temperData.uts.replace(' MPa', '')),
+                    description: temperData.desc
+                },
+                
+                // Metadata
+                slotId: slotId,
+                originalUnit: u,
+                scale: scale,
+                timestamp: new Date().toISOString()
+            };
+            
+            log(`Slot ${slotId}: Dati FEM generati (${Object.keys(femData).length} proprietà)`, 'success');
+            return femData;
+        }
+        
+        /**
+         * Esporta tutte le sezioni caricate per uso FEM
+         */
+        function exportAllToFEM() {
+            const sections = [];
+            [1, 2].forEach(id => {
+                const data = exportToFEM(id);
+                if (data) sections.push(data);
+            });
+            
+            if (sections.length === 0) {
+                log('Nessuna sezione da esportare', 'warn');
+                return null;
+            }
+            
+            const exportData = {
+                version: '6.5',
+                femEngineVersion: '4.1',
+                sections: sections,
+                timestamp: new Date().toISOString(),
+                usage: 'Importare in applicazione FEM con fem_engine_v4.js'
+            };
+            
+            // Copia in clipboard
+            navigator.clipboard.writeText(JSON.stringify(exportData, null, 2)).then(() => {
+                log('✅ Dati FEM copiati in clipboard!', 'success');
+                alert('Dati FEM copiati nella clipboard!\n\nIncollare nell\'applicazione FEM principale.');
+            }).catch(err => {
+                log('Errore copia clipboard: ' + err, 'error');
+            });
+            
+            return exportData;
+        }
+        
+        // ==========================================================================
+        // DOCUMENTATION MODAL
+        // ==========================================================================
+        const btnShowDocs = document.getElementById('btnShowDocs');
+        if (btnShowDocs) {
+            btnShowDocs.addEventListener('click', () => {
+                const docsModal = document.createElement('div');
+                docsModal.id = 'docsModal';
+                docsModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+                docsModal.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white sticky top-0 z-10">
+                            <div class="flex justify-between items-center">
+                                <h2 class="text-2xl font-bold">📖 Documentazione Sistema Import SVG & FEM</h2>
+                                <button onclick="document.getElementById('docsModal').remove()" class="text-white hover:text-gray-200 text-3xl">&times;</button>
+                            </div>
+                        </div>
+                        <div class="p-8 space-y-6">
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-blue-500 pb-2">🎯 Panoramica Sistema</h3>
+                                <p class="text-gray-600 leading-relaxed">
+                                    Questo strumento permette l'importazione e l'analisi di profili SVG per sezioni di bracci estensibili 
+                                    Gibus. Integra il motore FEM v4.1 con capacità avanzate di analisi strutturale, materiali, e dinamica.
+                                </p>
+                            </section>
+
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-green-500 pb-2">📥 Procedura Importazione SVG</h3>
+                                <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                                    <li><strong>Carica file SVG:</strong> Utilizzare i pulsanti "Carica File A" e "Carica File B" per sezioni profilo e spalla</li>
+                                    <li><strong>Seleziona unità:</strong> Specificare l'unità di misura corretta (mm, cm, m, in)</li>
+                                    <li><strong>Scala geometria:</strong> Applicare fattore di scala se necessario (default: 1.0)</li>
+                                    <li><strong>Materiale e tempratura:</strong> Selezionare lega alluminio e stato di trattamento termico</li>
+                                    <li><strong>Analisi automatica:</strong> Il sistema calcola automaticamente proprietà geometriche e meccaniche</li>
+                                </ol>
+                            </section>
+
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-purple-500 pb-2">🔧 Strumenti Editor</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                                        <h4 class="font-bold text-blue-900 mb-2">🖊️ Modifica Forma</h4>
+                                        <p class="text-sm text-gray-600">Trascina vertici per modificare geometria. Doppio click per aggiungere/rimuovere punti.</p>
+                                    </div>
+                                    <div class="bg-orange-50 p-3 rounded border border-orange-200">
+                                        <h4 class="font-bold text-orange-900 mb-2">↔️ Sposta Figura</h4>
+                                        <p class="text-sm text-gray-600">Trascina l'intera sezione per posizionamento relativo nell'assieme.</p>
+                                    </div>
+                                    <div class="bg-green-50 p-3 rounded border border-green-200">
+                                        <h4 class="font-bold text-green-900 mb-2">📐 Semplifica</h4>
+                                        <p class="text-sm text-gray-600">Riduce numero di vertici mantenendo forma generale (utile per SVG complessi).</p>
+                                    </div>
+                                    <div class="bg-red-50 p-3 rounded border border-red-200">
+                                        <h4 class="font-bold text-red-900 mb-2">🗑️ Rimuovi</h4>
+                                        <p class="text-sm text-gray-600">Cancella sezione corrente dallo slot.</p>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-indigo-500 pb-2">⚙️ Integrazione FEM v4.1</h3>
+                                <p class="text-gray-600 mb-3">Il sistema esporta dati compatibili con <code class="bg-gray-100 px-2 py-1 rounded">fem_engine_v4.js</code>:</p>
+                                <ul class="list-disc list-inside space-y-2 text-gray-700">
+                                    <li><strong>Proprietà geometriche:</strong> Area, momenti di inerzia (Ixx, Iyy), centroide</li>
+                                    <li><strong>Proprietà materiale:</strong> Modulo elastico, snervamento, rottura</li>
+                                    <li><strong>Analisi spessori:</strong> Misurazione automatica spessori minimi (importanti per verifiche EC9)</li>
+                                    <li><strong>Compatibilità:</strong> Dati esportati utilizzabili direttamente con <code class="bg-gray-100 px-2 py-1 rounded">BeamSectionWithHoles</code></li>
+                                </ul>
+                            </section>
+
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-yellow-500 pb-2">📊 Output e Risultati</h3>
+                                <div class="bg-gray-50 p-4 rounded border border-gray-200">
+                                    <h4 class="font-bold text-gray-800 mb-2">Sezioni Individuali (A, B):</h4>
+                                    <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                                        <li>Area sezione [unità²]</li>
+                                        <li>Posizione baricentro G (X, Y)</li>
+                                        <li>Momenti di inerzia Ixx, Iyy baricentrico</li>
+                                        <li>Massa lineare [kg/m]</li>
+                                        <li>Spessore minimo parete</li>
+                                    </ul>
+                                    <h4 class="font-bold text-gray-800 mb-2 mt-3">Assieme Globale (A+B):</h4>
+                                    <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                                        <li>Proprietà combinate secondo teorema di Steiner</li>
+                                        <li>Massa totale lineare</li>
+                                        <li>Centroide complessivo</li>
+                                        <li>Inerzie trasportate agli assi principali</li>
+                                    </ul>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-red-500 pb-2">🎓 Database Materiali</h3>
+                                <p class="text-gray-600 mb-2">Il sistema include un database esteso di leghe di alluminio:</p>
+                                <div class="grid grid-cols-3 gap-2 text-xs">
+                                    <div class="bg-blue-50 p-2 rounded"><strong>Estrusi:</strong> 6060, 6061, 6063, 6005A, 6082, 1050A, 5083</div>
+                                    <div class="bg-orange-50 p-2 rounded"><strong>Pressofusi:</strong> 46100, 46000, 44300, ZAMAK, AZ91D (Mg)</div>
+                                    <div class="bg-green-50 p-2 rounded"><strong>Conchiglia/CNC:</strong> 42100, 43000, 44100, 51300, 7075, 2024</div>
+                                </div>
+                                <p class="text-sm text-gray-500 mt-2">Ogni materiale include stati di trattamento termico specifici (T4, T6, F, H14, ecc.)</p>
+                            </section>
+
+                            <section class="bg-yellow-50 p-4 rounded border-l-4 border-yellow-500">
+                                <h3 class="text-lg font-bold text-yellow-900 mb-2">⚠️ Note Importanti</h3>
+                                <ul class="list-disc list-inside space-y-1 text-sm text-yellow-800">
+                                    <li>File SVG devono contenere percorsi (path) o forme geometriche standard</li>
+                                    <li>Trasformazioni SVG vengono applicate automaticamente durante l'importazione</li>
+                                    <li>Per risultati accurati, verificare che l'unità di misura corrisponda al file SVG</li>
+                                    <li>Spessori minimi sono calcolati algoritmicamente - verificare sempre con dati di progetto</li>
+                                    <li>Export FEM copia dati in clipboard in formato JSON</li>
+                                </ul>
+                            </section>
+
+                            <section>
+                                <h3 class="text-xl font-bold text-gray-800 mb-3 border-b-2 border-gray-500 pb-2">📝 Esempio Utilizzo</h3>
+                                <div class="bg-gray-900 text-green-400 p-4 rounded font-mono text-xs overflow-x-auto">
+<pre>// 1. Caricare SVG profilo in Slot A
+// 2. Caricare SVG spalla in Slot B
+// 3. Verificare risultati nel pannello "Output Comparativo"
+// 4. Click "📖 Documentazione" -> sezione basso della modale
+// 5. Click "Esporta per FEM" per ottenere dati JSON
+// 6. Importare JSON in index.html con fem_engine_v4.js
+
+// Esempio output JSON:
+{
+  "version": "6.5",
+  "femEngineVersion": "4.1",
+  "sections": [
+    {
+      "materialKey": "6061-T6",
+      "area": 0.000234,  // m²
+      "inertia_Ixx": 2.45e-8,  // m⁴
+      "width": 0.033,  // m
+      "height": 0.062  // m
+    }
+  ]
+}</pre>
+                                </div>
+                            </section>
+
+                            <div class="flex justify-center gap-4 pt-6 border-t border-gray-200">
+                                <button onclick="exportAllToFEM()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition">
+                                    📤 Esporta per FEM
+                                </button>
+                                <button onclick="document.getElementById('docsModal').remove()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-3 rounded-lg font-bold shadow-md transition">
+                                    Chiudi
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(docsModal);
+            });
+        }
     </script>
 </body>
 </html>
