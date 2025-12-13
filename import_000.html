@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcolatore Sezione SVG (Dual Slot + Move)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        
+        .canvas-container {
+            border: 1px solid #94a3b8;
+            background-color: #ffffff;
+            background-image: 
+                linear-gradient(#e2e8f0 1px, transparent 1px),
+                linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-position: -1px -1px;
+            cursor: crosshair;
+        }
+        
+        .debug-console {
+            background-color: #1e293b; color: #4ade80; font-family: monospace; font-size: 11px;
+            padding: 10px; border-radius: 6px; height: 120px; overflow-y: auto; margin-top: 10px; border: 1px solid #334155;
+        }
+        .log-entry { margin-bottom: 2px; border-bottom: 1px solid #334155; padding-bottom: 2px; }
+        .log-error { color: #f87171; font-weight: bold; }
+        .log-warn { color: #fbbf24; }
+        .log-success { color: #86efac; font-weight: bold; }
+        
+        .editor-toolbar {
+            position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 10;
+        }
+        .btn-tool {
+            background: white; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px;
+            font-size: 11px; font-weight: bold; color: #475569; cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn-tool:hover { background: #f1f5f9; color: #2563eb; }
+        .btn-tool.active { background: #e0f2fe; border-color: #3b82f6; color: #1d4ed8; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); }
+        
+        .help-pill {
+            background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 12px; font-size: 11px; color: #334155; 
+            border: 1px solid #cbd5e1; position: absolute; bottom: 10px; left: 10px; pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-weight: 500;
+        }
+        #hoverTooltip {
+            position: absolute; pointer-events: none; background: rgba(0,0,0,0.8); color: white;
+            padding: 4px 8px; border-radius: 4px; font-size: 12px; display: none; z-index: 50;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-slate-800 p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div>
+                <h1 class="text-2xl font-bold">Analisi Sezione SVG & Editor</h1>
+                <p class="text-slate-300 text-sm mt-1">Engine V6.4: Database Leghe Alluminio Esteso</p>
+            </div>
+            <div class="mt-4 md:mt-0 bg-indigo-600 px-4 py-2 rounded text-xs font-bold text-white shadow-sm border border-indigo-400">
+                DB UPDATED
+            </div>
+        </div>
+
+        <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Sidebar Controlli -->
+            <div class="lg:col-span-4 space-y-4 max-h-[800px] overflow-y-auto pr-1">
+                
+                <!-- SLOT A -->
+                <div class="bg-slate-50 p-4 rounded-lg border-l-4 border-blue-500 shadow-sm relative">
+                    <div class="absolute top-2 right-2 text-xs font-bold text-blue-500">SEZIONE A</div>
+                    <h2 class="font-bold text-slate-700 mb-3 text-sm">Carica File A</h2>
+                    <input type="file" id="fileInput1" accept=".svg" class="block w-full text-xs text-slate-500 mb-2 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer"/>
+                    
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase">Unità</label>
+                            <select id="unitSelect1" class="w-full p-1 border border-gray-300 rounded text-xs" onchange="recalcAll(1)">
+                                <option value="mm">mm</option>
+                                <option value="cm">cm</option>
+                                <option value="m">m</option>
+                                <option value="in">in</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase">Scala</label>
+                            <input type="number" id="scaleInput1" value="1.0" step="0.1" class="w-full p-1 border border-gray-300 rounded text-xs" onchange="recalcAll(1)">
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <select id="materialSelect1" onchange="updateTempers(1); recalcAll(1)" class="w-full p-1 border border-gray-300 rounded text-xs font-medium"></select>
+                        <select id="temperSelect1" onchange="updateMaterialInfo(1); recalcAll(1)" class="w-full p-1 border border-blue-200 rounded text-xs bg-blue-50 text-blue-800 font-medium"></select>
+                        <div id="infoBox1" class="text-[10px] text-slate-500 bg-white p-2 rounded border hidden"></div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="processSVG(1)" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs">Carica</button>
+                        <button onclick="simplifyGeometry(1)" class="flex-grow border border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-1 px-2 rounded text-xs">Semplifica</button>
+                        <button onclick="removeSection(1)" class="w-8 border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 font-bold rounded text-xs flex items-center justify-center" title="Rimuovi Sezione A">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SLOT B -->
+                <div class="bg-slate-50 p-4 rounded-lg border-l-4 border-orange-500 shadow-sm relative">
+                    <div class="absolute top-2 right-2 text-xs font-bold text-orange-500">SEZIONE B</div>
+                    <h2 class="font-bold text-slate-700 mb-3 text-sm">Carica File B</h2>
+                    <input type="file" id="fileInput2" accept=".svg" class="block w-full text-xs text-slate-500 mb-2 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200 cursor-pointer"/>
+                    
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase">Unità</label>
+                            <select id="unitSelect2" class="w-full p-1 border border-gray-300 rounded text-xs" onchange="recalcAll(2)">
+                                <option value="mm">mm</option>
+                                <option value="cm">cm</option>
+                                <option value="m">m</option>
+                                <option value="in">in</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase">Scala</label>
+                            <input type="number" id="scaleInput2" value="1.0" step="0.1" class="w-full p-1 border border-gray-300 rounded text-xs" onchange="recalcAll(2)">
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <select id="materialSelect2" onchange="updateTempers(2); recalcAll(2)" class="w-full p-1 border border-gray-300 rounded text-xs font-medium"></select>
+                        <select id="temperSelect2" onchange="updateMaterialInfo(2); recalcAll(2)" class="w-full p-1 border border-orange-200 rounded text-xs bg-orange-50 text-orange-800 font-medium"></select>
+                        <div id="infoBox2" class="text-[10px] text-slate-500 bg-white p-2 rounded border hidden"></div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="processSVG(2)" class="flex-grow bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-2 rounded text-xs">Carica</button>
+                        <button onclick="simplifyGeometry(2)" class="flex-grow border border-orange-600 text-orange-600 hover:bg-orange-50 font-bold py-1 px-2 rounded text-xs">Semplifica</button>
+                        <button onclick="removeSection(2)" class="w-8 border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 font-bold rounded text-xs flex items-center justify-center" title="Rimuovi Sezione B">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Log</label>
+                    <div id="debugConsole" class="debug-console">Sistema pronto.</div>
+                </div>
+            </div>
+
+            <!-- Canvas e Risultati -->
+            <div class="lg:col-span-8 flex flex-col gap-6">
+                <div class="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm h-[500px] flex flex-col relative">
+                    <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0">
+                        <span class="text-sm font-semibold text-slate-600 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+                            Editor Assieme
+                        </span>
+                        <span id="statusText" class="text-xs text-slate-400">Strumento Modifica attivo</span>
+                    </div>
+                    
+                    <!-- Editor Canvas -->
+                    <div class="canvas-container relative flex-grow w-full overflow-hidden">
+                        <canvas id="previewCanvas"></canvas>
+                        <div id="hoverTooltip"></div>
+                        
+                        <!-- Toolbar Overlay -->
+                        <div class="editor-toolbar">
+                            <button id="btnToolEdit" class="btn-tool active" onclick="setTool('edit')">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                Modifica Forma
+                            </button>
+                            <button id="btnToolMove" class="btn-tool" onclick="setTool('move')">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                                Sposta Figura
+                            </button>
+                            <div class="w-px h-6 bg-slate-300 mx-1"></div>
+                            <button class="btn-tool" onclick="resetView()">🔍 Reset Zoom</button>
+                        </div>
+                        
+                        <div id="helpPill" class="help-pill">
+                            Modifica: Trascina vertici | Sposta: Trascina l'intera sezione
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risultati Live -->
+                <div id="resultsContainer" class="hidden">
+                    <h3 class="text-lg font-bold text-slate-800 mb-3 border-b pb-2">Output Comparativo & Assieme</h3>
+                    <div id="cardsWrapper" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+                    <div class="mt-4">
+                        <details>
+                            <summary class="text-xs font-bold text-slate-500 cursor-pointer">JSON Output</summary>
+                            <textarea id="jsonOutput" readonly class="w-full h-32 p-2 mt-2 text-xs font-mono bg-slate-900 text-green-400 rounded"></textarea>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="svgHiddenContainer" style="width:2000px; height:2000px; position:absolute; top:-9999px; left:-9999px; overflow:hidden;"></div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        const appState = {
+            sections: {
+                1: { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null },
+                2: { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null }
+            },
+            scaleDraw: 1, offX: 0, offY: 0,
+            activeTool: 'edit', // 'edit' or 'move'
+            isDragging: false, dragTarget: null, 
+            lastMouse: {x:0, y:0}, hoverThickness: null
+        };
+
+        function log(msg, type='info') {
+            const consoleEl = document.getElementById('debugConsole');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + (type==='error'?'log-error':(type==='warn'?'log-warn':(type==='success'?'log-success':'')));
+            entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            consoleEl.appendChild(entry);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // --- TOOL MANAGEMENT ---
+        function setTool(tool) {
+            appState.activeTool = tool;
+            document.getElementById('btnToolEdit').className = `btn-tool ${tool==='edit'?'active':''}`;
+            document.getElementById('btnToolMove').className = `btn-tool ${tool==='move'?'active':''}`;
+            const help = document.getElementById('helpPill');
+            if (tool === 'edit') help.innerText = "Modifica: Trascina vertici | Doppio Click: Aggiungi/Rimuovi";
+            else help.innerText = "Sposta: Clicca e trascina una sezione per posizionarla";
+            drawEditor();
+        }
+
+        // --- SECTION MANAGEMENT ---
+        function removeSection(id) {
+            appState.sections[id] = { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null };
+            document.getElementById('fileInput'+id).value = '';
+            log(`Slot ${id}: Rimossa.`, 'warn');
+            updateLayout();
+            recalcAll();
+        }
+
+        // --- 1. DB MATERIALI (AGGIORNATO) ---
+        const materialsDB = {
+            "extrusion": {
+                label: "Alluminio da Estrusione",
+                alloys: {
+                    "6060": { name: "EN AW-6060 (AlMgSi) - Standard", density: 2700, young_modulus_gpa: 69, tempers: { "T6": { desc: "Standard", hb: "60-80 HB", yield: "160 MPa", uts: "215 MPa", thermal_note: "Max 100°C.", process: "Tempra + Aging 175°C" }, "T5": { desc: "Economico", hb: "50-65 HB", yield: "120 MPa", uts: "160 MPa", thermal_note: "Stabile.", process: "Raffreddamento aria" } } },
+                    "6061": { name: "EN AW-6061 (AlMg1SiCu) - Structural USA", density: 2700, young_modulus_gpa: 69, tempers: { "T6": { desc: "Strutturale", hb: "95 HB", yield: "240 MPa", uts: "290 MPa", thermal_note: "Tenace. Max 100°C.", process: "Solub + Aging" }, "T4": { desc: "Invecchiato naturale", hb: "60-70 HB", yield: "110 MPa", uts: "180 MPa" } } },
+                    "6063": { name: "EN AW-6063 (Architettonico)", density: 2700, young_modulus_gpa: 69, tempers: { "T6": { desc: "Alta resistenza", hb: "75 HB", yield: "170 MPa", uts: "215 MPa", thermal_note: "Finitura top.", process: "Tempra aria" }, "T5": { desc: "Finestre/Dissipatori", hb: "60 HB", yield: "130 MPa", uts: "175 MPa" } } },
+                    "6005A": { name: "EN AW-6005A (Rail/Automotive)", density: 2700, young_modulus_gpa: 70, tempers: { "T6": { desc: "Strutturale Tenace", hb: "95-105 HB", yield: "225 MPa", uts: "270 MPa" } } },
+                    "6082": { name: "EN AW-6082 (Anticorodal)", density: 2700, young_modulus_gpa: 70, tempers: { "T6": { desc: "Heavy Duty", hb: "95-105 HB", yield: "260 MPa", uts: "310 MPa", thermal_note: "Max 130°C.", process: "Tempra H2O" }, "O": { desc: "Ricotto", hb: "35 HB", yield: "60 MPa", uts: "110 MPa" } } },
+                    "1050A": { name: "EN AW-1050A (Puro 99.5%)", density: 2705, young_modulus_gpa: 69, tempers: { "H14": { desc: "Mezzo duro", hb: "30-40 HB", yield: "85 MPa", uts: "105 MPa" }, "O": { desc: "Ricotto", hb: "20 HB", yield: "25 MPa", uts: "65 MPa" } } },
+                    "5083": { name: "EN AW-5083 (Marine)", density: 2660, young_modulus_gpa: 71, tempers: { "H111": { desc: "Laminato", hb: "75 HB", yield: "125 MPa", uts: "275 MPa", thermal_note: "Criogenico OK.", process: "Laminazione" }, "H321": { desc: "Marine Grade", hb: "90 HB", yield: "215 MPa", uts: "305 MPa" } } }
+                }
+            },
+            "casting": {
+                label: "Pressofusione (Die Casting)",
+                alloys: {
+                    "46100": { name: "EN AB-46100 (AlSi11Cu2) - Auto Std", density: 2650, young_modulus_gpa: 71, tempers: { "F": { desc: "As Cast", hb: "85-95 HB", yield: "150 MPa", uts: "260 MPa", thermal_note: "Max 150°C.", process: "Pressofusione" } } },
+                    "46000": { name: "EN AB-46000 (AlSi9Cu3)", density: 2760, young_modulus_gpa: 71, tempers: { "F": { desc: "As Cast", hb: "80-90 HB", yield: "140 MPa", uts: "240 MPa", thermal_note: "Standard.", process: "Pressofusione" } } },
+                    "44300": { name: "EN AB-44300 (AlSi12)", density: 2650, young_modulus_gpa: 73, tempers: { "F": { desc: "As Cast", hb: "65 HB", yield: "130 MPa", uts: "240 MPa" } } },
+                    "ZAMAK5": { name: "ZAMAK 5 (ZnAl4Cu1)", density: 6600, young_modulus_gpa: 85, tempers: { "F": { desc: "Greggio", hb: "95 HB", yield: "220 MPa", uts: "335 MPa", thermal_note: "Creep > 70°C.", process: "Hot Chamber" } } },
+                    "ZAMAK3": { name: "ZAMAK 3 (ZnAl4)", density: 6600, young_modulus_gpa: 85, tempers: { "F": { desc: "Greggio", hb: "82 HB", yield: "200 MPa", uts: "280 MPa" } } },
+                    "AZ91D": { name: "Magnesio AZ91D", density: 1810, young_modulus_gpa: 45, tempers: { "F": { desc: "As Cast", hb: "65 HB", yield: "150 MPa", uts: "230 MPa", thermal_note: "Infiammabile polveri.", process: "Die Casting" } } }
+                }
+            },
+            "gravity": {
+                label: "Colata in Conchiglia (Gravity)",
+                alloys: {
+                    "42100": { name: "EN AB-42100 (AlSi7Mg0.3) - Premium", density: 2680, young_modulus_gpa: 71, tempers: { "T6": { desc: "Solub+Inv", hb: "90-100 HB", yield: "210 MPa", uts: "290 MPa", thermal_note: "Alta fatica.", process: "Colata+T6" }, "T4": { desc: "Inv. Naturale", hb: "75 HB", yield: "130 MPa", uts: "230 MPa" } } },
+                    "43000": { name: "EN AB-43000 (AlSi10Mg)", density: 2680, young_modulus_gpa: 71, tempers: { "T6": { desc: "Automotive", hb: "90-105 HB", yield: "220 MPa", uts: "300 MPa", thermal_note: "Standard.", process: "Colata+T6" }, "F": { desc: "As Cast", hb: "70 HB", yield: "110 MPa", uts: "190 MPa" } } },
+                    "44100": { name: "EN AB-44100 (AlSi12(b))", density: 2650, young_modulus_gpa: 73, tempers: { "F": { desc: "As Cast", hb: "60-70 HB", yield: "90 MPa", uts: "170 MPa" } } },
+                    "51300": { name: "EN AB-51300 (AlMg5)", density: 2650, young_modulus_gpa: 70, tempers: { "F": { desc: "Lucidabile", hb: "55 HB", yield: "90 MPa", uts: "160 MPa" } } }
+                }
+            },
+            "cnc": {
+                label: "Lavorazione CNC",
+                alloys: {
+                    "7075": { name: "EN AW-7075 (Ergal)", density: 2810, young_modulus_gpa: 72, tempers: { "T6": { desc: "Max Res", hb: "150 HB", yield: "500 MPa", uts: "570 MPa", thermal_note: "NO >125°C.", process: "Tempra+Aging" } } },
+                    "2024": { name: "EN AW-2024 (Avional)", density: 2780, young_modulus_gpa: 73, tempers: { "T3": { desc: "Toughness", hb: "120 HB", yield: "325 MPa", uts: "470 MPa", thermal_note: "Buona a caldo.", process: "Tempra+Stiratura" }, "T4": { desc: "Inv. Naturale", hb: "115 HB", yield: "290 MPa", uts: "440 MPa" } } },
+                    "5754": { name: "EN AW-5754 (AlMg3)", density: 2670, young_modulus_gpa: 70, tempers: { "H111": { desc: "Ricotto", hb: "45-55 HB", yield: "80 MPa", uts: "190 MPa" } } }
+                }
+            }
+        };
+
+        // --- UI INIT ---
+        function initMaterials() {
+            populateSelects(1); populateSelects(2); initCanvasEvents();
+        }
+        function populateSelects(id) {
+            const s = document.getElementById('materialSelect' + id); s.innerHTML='';
+            Object.keys(materialsDB).forEach(k => {
+                const g = materialsDB[k]; const og = document.createElement('optgroup'); og.label=g.label;
+                Object.keys(g.alloys).forEach(ak => { const op=document.createElement('option'); op.value=`${k}:${ak}`; op.text=g.alloys[ak].name; og.appendChild(op); });
+                s.appendChild(og);
+            });
+            updateTempers(id);
+        }
+        function updateTempers(id) {
+            const ms = document.getElementById('materialSelect' + id); if(!ms.value)return;
+            const [g,a] = ms.value.split(':'); const al=materialsDB[g].alloys[a];
+            const ts = document.getElementById('temperSelect' + id); ts.innerHTML='';
+            Object.keys(al.tempers).forEach(t => { const op=document.createElement('option'); op.value=t; op.text=t; ts.appendChild(op); });
+            updateMaterialInfo(id);
+        }
+        function updateMaterialInfo(id) {
+            const ms=document.getElementById('materialSelect'+id); const ts=document.getElementById('temperSelect'+id);
+            const [g,a]=ms.value.split(':'); const al=materialsDB[g].alloys[a]; const td=al.tempers[ts.value];
+            const info = document.getElementById('infoBox'+id);
+            info.innerHTML = `Densità: <b>${(al.density/1000).toFixed(2)}</b> | UTS: <b class="text-red-600">${td.uts}</b>`;
+            info.classList.remove('hidden');
+        }
+        window.addEventListener('DOMContentLoaded', initMaterials);
+
+        // --- 2. EDITOR INTERACTION ---
+        function initCanvasEvents() {
+            const cv = document.getElementById('previewCanvas');
+            const tooltip = document.getElementById('hoverTooltip');
+            
+            cv.addEventListener('mousedown', (e) => {
+                const {x, y} = getMousePos(cv, e);
+                if (appState.activeTool === 'edit') {
+                    const target = findNearestPoint(x, y);
+                    if (target) {
+                        appState.isDragging = true;
+                        appState.dragTarget = target;
+                        cv.style.cursor = 'grabbing';
+                    }
+                } else if (appState.activeTool === 'move') {
+                    const hitSection = hitTestSection(x, y);
+                    if (hitSection) {
+                        appState.isDragging = true;
+                        appState.dragTarget = { type: 'section', slotId: hitSection };
+                        appState.lastMouse = {x, y};
+                        cv.style.cursor = 'grabbing';
+                    }
+                }
+            });
+
+            cv.addEventListener('mousemove', (e) => {
+                const {x, y} = getMousePos(cv, e);
+                if (appState.isDragging && appState.dragTarget) {
+                    if (appState.activeTool === 'edit' && appState.dragTarget.type !== 'section') {
+                        const { slotId, cIdx, pIdx } = appState.dragTarget;
+                        const section = appState.sections[slotId];
+                        const modelX = ((x - appState.offX) / appState.scaleDraw) - section.offset.x;
+                        const modelY = ((y - appState.offY) / appState.scaleDraw) - section.offset.y;
+                        const pts = section.contours[cIdx];
+                        pts[pIdx].x = modelX; pts[pIdx].y = modelY;
+                        if (pIdx === 0) { pts[pts.length-1].x = modelX; pts[pts.length-1].y = modelY; }
+                        if (pIdx === pts.length-1) { pts[0].x = modelX; pts[0].y = modelY; }
+                    } else if (appState.activeTool === 'move' && appState.dragTarget.type === 'section') {
+                        const dx = (x - appState.lastMouse.x) / appState.scaleDraw;
+                        const dy = (y - appState.lastMouse.y) / appState.scaleDraw;
+                        const section = appState.sections[appState.dragTarget.slotId];
+                        section.offset.x += dx; section.offset.y += dy;
+                        appState.lastMouse = {x, y};
+                    }
+                    requestAnimationFrame(drawEditor);
+                    tooltip.style.display = 'none';
+                } else {
+                    if (appState.activeTool === 'edit') {
+                        const target = findNearestPoint(x, y);
+                        cv.style.cursor = target ? 'grab' : 'crosshair';
+                        handleThicknessTooltip(x, y);
+                    } else {
+                        const hit = hitTestSection(x, y);
+                        cv.style.cursor = hit ? 'move' : 'default';
+                        tooltip.style.display = 'none';
+                    }
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (appState.isDragging) {
+                    const target = appState.dragTarget;
+                    appState.isDragging = false; appState.dragTarget = null;
+                    document.getElementById('previewCanvas').style.cursor = appState.activeTool==='move'?'default':'crosshair';
+                    if (target.type !== 'section') { recalcBounds(target.slotId); recalcAll(target.slotId); }
+                    else { recalcAll(); } 
+                }
+            });
+
+            cv.addEventListener('dblclick', (e) => {
+                if (appState.activeTool !== 'edit') return;
+                const {x, y} = getMousePos(cv, e);
+                const ptTarget = findNearestPoint(x, y);
+                if (ptTarget) {
+                    const { slotId, cIdx, pIdx } = ptTarget;
+                    const pts = appState.sections[slotId].contours[cIdx];
+                    if (pts.length <= 4) return;
+                    if (pIdx === 0) { pts.shift(); pts[pts.length-1].x = pts[0].x; pts[pts.length-1].y = pts[0].y; }
+                    else if (pIdx === pts.length - 1) { pts.pop(); pts[pts.length-1].x = pts[0].x; pts[pts.length-1].y = pts[0].y; }
+                    else { pts.splice(pIdx, 1); }
+                    recalcAll(slotId);
+                    return;
+                }
+                const segTarget = findNearestSegment(x, y);
+                if (segTarget) {
+                    const { slotId, cIdx, pIdx } = segTarget;
+                    const pts = appState.sections[slotId].contours[cIdx];
+                    const section = appState.sections[slotId];
+                    const modelX = ((x - appState.offX) / appState.scaleDraw) - section.offset.x;
+                    const modelY = ((y - appState.offY) / appState.scaleDraw) - section.offset.y;
+                    pts.splice(pIdx + 1, 0, {x: modelX, y: modelY});
+                    recalcAll(slotId);
+                }
+            });
+        }
+
+        function getMousePos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+        }
+        function findNearestPoint(mx, my) {
+            const threshold = 8; let bestDist = threshold; let target = null;
+            [1, 2].forEach(sid => {
+                const sec = appState.sections[sid];
+                if (!sec.loaded) return;
+                sec.contours.forEach((pts, cIdx) => {
+                    pts.forEach((pt, pIdx) => {
+                        const sx = (pt.x + sec.offset.x) * appState.scaleDraw + appState.offX;
+                        const sy = (pt.y + sec.offset.y) * appState.scaleDraw + appState.offY;
+                        const dist = Math.sqrt((mx-sx)**2 + (my-sy)**2);
+                        if (dist < bestDist) { bestDist = dist; target = { slotId: sid, cIdx, pIdx }; }
+                    });
+                });
+            });
+            return target;
+        }
+        function findNearestSegment(mx, my) {
+            const threshold = 6; let bestDist = threshold; let target = null;
+            [1, 2].forEach(sid => {
+                const sec = appState.sections[sid];
+                if (!sec.loaded) return;
+                sec.contours.forEach((pts, cIdx) => {
+                    for (let i = 0; i < pts.length - 1; i++) {
+                        const p1 = pts[i]; const p2 = pts[i+1];
+                        const x1 = (p1.x + sec.offset.x) * appState.scaleDraw + appState.offX;
+                        const y1 = (p1.y + sec.offset.y) * appState.scaleDraw + appState.offY;
+                        const x2 = (p2.x + sec.offset.x) * appState.scaleDraw + appState.offX;
+                        const y2 = (p2.y + sec.offset.y) * appState.scaleDraw + appState.offY;
+                        const dist = distToSegment(mx, my, x1, y1, x2, y2);
+                        if (dist < bestDist) { bestDist = dist; target = { slotId: sid, cIdx, pIdx: i }; }
+                    }
+                });
+            });
+            return target;
+        }
+        function hitTestSection(mx, my) {
+            const ctx = document.getElementById('previewCanvas').getContext('2d');
+            const ids = [2, 1];
+            for(let i=0; i<ids.length; i++) {
+                const sid = ids[i]; const sec = appState.sections[sid];
+                if(!sec.loaded) continue;
+                const path = new Path2D();
+                sec.contours.forEach(pts => {
+                    if(pts.length < 2) return;
+                    const sx0 = (pts[0].x + sec.offset.x) * appState.scaleDraw + appState.offX;
+                    const sy0 = (pts[0].y + sec.offset.y) * appState.scaleDraw + appState.offY;
+                    path.moveTo(sx0, sy0);
+                    for(let j=1; j<pts.length; j++) {
+                        const sx = (pts[j].x + sec.offset.x) * appState.scaleDraw + appState.offX;
+                        const sy = (pts[j].y + sec.offset.y) * appState.scaleDraw + appState.offY;
+                        path.lineTo(sx, sy);
+                    }
+                    path.closePath();
+                });
+                if (ctx.isPointInPath(path, mx, my, 'evenodd')) return sid;
+            }
+            return null;
+        }
+        function handleThicknessTooltip(x, y) {
+            const tooltip = document.getElementById('hoverTooltip');
+            let best = null; let bestDist = 20;
+            [1, 2].forEach(sid => {
+                const sec = appState.sections[sid];
+                if(sec.loaded && sec.thickness && sec.thickness.all) {
+                    const scaleInput = parseFloat(document.getElementById('scaleInput'+sid).value) || 1.0;
+                    const unit = document.getElementById('unitSelect'+sid).value;
+                    sec.thickness.all.forEach(thk => {
+                        const sx1 = (thk.p1.x + sec.offset.x) * appState.scaleDraw + appState.offX;
+                        const sy1 = (thk.p1.y + sec.offset.y) * appState.scaleDraw + appState.offY;
+                        const d = Math.sqrt((x-sx1)**2 + (y-sy1)**2);
+                        if(d < bestDist) { bestDist=d; best={thk, sid, val: thk.dist*scaleInput, u:unit}; }
+                    });
+                }
+            });
+            if (best) {
+                appState.hoverThickness = best.thk;
+                tooltip.style.display = 'block'; tooltip.style.left = (x + 15) + 'px'; tooltip.style.top = (y + 15) + 'px';
+                tooltip.innerText = `Sez.${best.sid==1?'A':'B'}: ${best.val.toFixed(2)} ${best.u}`;
+                requestAnimationFrame(drawEditor);
+            } else {
+                tooltip.style.display = 'none';
+                if (appState.hoverThickness) { appState.hoverThickness = null; requestAnimationFrame(drawEditor); }
+            }
+        }
+        function distToSegment(px, py, x1, y1, x2, y2) {
+            const l2 = (x1-x2)**2 + (y1-y2)**2; if (l2 === 0) return Math.sqrt((px-x1)**2 + (py-y1)**2);
+            let t = ((px-x1)*(x2-x1) + (py-y1)*(y2-y1)) / l2; t = Math.max(0, Math.min(1, t));
+            const xProj = x1 + t * (x2 - x1); const yProj = y1 + t * (y2 - y1);
+            return Math.sqrt((px-xProj)**2 + (py-yProj)**2);
+        }
+
+        // --- 3. GEOMETRY MATH ---
+        function processSVG(slotId) {
+            const f = document.getElementById('fileInput' + slotId);
+            if(!f.files.length) { log(`Slot ${slotId}: Nessun file selezionato.`, 'error'); return; }
+            const r = new FileReader();
+            r.onload = e => {
+                let t = e.target.result; const i = t.indexOf('<svg'); if(i>0) t=t.substring(i);
+                analyzeContent(t, slotId);
+            };
+            r.readAsText(f.files[0]);
+        }
+        function analyzeContent(svgText, slotId) {
+            const parser = new DOMParser(); const doc = parser.parseFromString(svgText, "image/svg+xml");
+            if (doc.querySelector('parsererror')) { log(`Slot ${slotId}: XML Errato.`, 'error'); return; }
+            const box = document.getElementById('svgHiddenContainer'); box.innerHTML='';
+            const svgEl = doc.documentElement; svgEl.setAttribute('width','2000px'); svgEl.setAttribute('height','2000px');
+            if(!svgEl.getAttribute('viewBox')) svgEl.setAttribute('viewBox','0 0 2000 2000');
+            box.appendChild(svgEl);
+            const els = box.querySelectorAll('path, rect, circle, ellipse, polyline, polygon');
+            let sectionContours = [];
+            els.forEach((el) => {
+                if(el.getAttribute('display')==='none') return;
+                const cs = getContoursBySplitting(el, 500);
+                cs.forEach(c => sectionContours.push(c));
+            });
+            if (sectionContours.length === 0) { log(`Slot ${slotId}: Nessuna geometria trovata.`, 'warn'); return; }
+            appState.sections[slotId].loaded = true;
+            appState.sections[slotId].contours = sectionContours;
+            log(`Slot ${slotId}: Caricati ${sectionContours.length} contorni.`, 'success');
+            recalcBounds(slotId); updateLayout(); recalcAll(slotId);
+        }
+        function recalcBounds(slotId) {
+            const sec = appState.sections[slotId];
+            if (!sec.loaded) return;
+            let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+            sec.contours.forEach(pts => pts.forEach(p => { if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x; if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y; }));
+            sec.bounds = { minX, maxX, minY, maxY };
+        }
+        function updateLayout() {
+            appState.sections[1].offset = {x: 0, y: 0};
+            if (appState.sections[1].loaded && appState.sections[2].loaded) {
+                const b1 = appState.sections[1].bounds; const b2 = appState.sections[2].bounds;
+                const width1 = b1.maxX - b1.minX; const padding = Math.max(20, width1 * 0.1); 
+                appState.sections[2].offset = { x: (b1.maxX + padding) - b2.minX, y: 0 };
+            } else { appState.sections[2].offset = {x: 0, y: 0}; }
+            calculateGlobalZoom();
+        }
+        function calculateGlobalZoom() {
+            let gMinX=Infinity, gMinY=Infinity, gMaxX=-Infinity, gMaxY=-Infinity; let hasData = false;
+            [1, 2].forEach(sid => {
+                const sec = appState.sections[sid];
+                if(sec.loaded) {
+                    hasData = true; const ox = sec.offset.x; const oy = sec.offset.y; const b = sec.bounds;
+                    if(b.minX+ox < gMinX) gMinX = b.minX+ox; if(b.maxX+ox > gMaxX) gMaxX = b.maxX+ox;
+                    if(b.minY+oy < gMinY) gMinY = b.minY+oy; if(b.maxY+oy > gMaxY) gMaxY = b.maxY+oy;
+                }
+            });
+            if (!hasData) return;
+            const cv = document.getElementById('previewCanvas');
+            const padding = 40; const w = gMaxX - gMinX || 100; const h = gMaxY - gMinY || 100;
+            cv.width = cv.parentElement.offsetWidth; cv.height = cv.parentElement.offsetHeight;
+            appState.scaleDraw = Math.min((cv.width-padding*2)/w, (cv.height-padding*2)/h);
+            appState.offX = (cv.width - w*appState.scaleDraw)/2 - gMinX*appState.scaleDraw;
+            appState.offY = (cv.height - h*appState.scaleDraw)/2 - gMinY*appState.scaleDraw;
+        }
+        function resetView() { calculateGlobalZoom(); drawEditor(); }
+        function simplifyGeometry(slotId) {
+            const sec = appState.sections[slotId];
+            if (!sec.loaded) return;
+            const minDist = 2.0; const maxAngle = 0.06;
+            sec.contours.forEach((c, idx) => {
+                if (c.length < 5) return;
+                let pts = [c[0]];
+                for(let i=1; i<c.length; i++) {
+                    const d = Math.sqrt((c[i].x - pts[pts.length-1].x)**2 + (c[i].y - pts[pts.length-1].y)**2);
+                    if (d >= minDist) pts.push(c[i]);
+                }
+                const first=c[0]; const last=pts[pts.length-1];
+                if (Math.abs(first.x-last.x)>0.001) pts.push({x:first.x, y:first.y});
+                let changed=true;
+                while(changed && pts.length>4) {
+                    changed=false; const next=[pts[0]];
+                    for(let i=1; i<pts.length-1; i++) {
+                        const p=next[next.length-1], cur=pts[i], n=pts[i+1];
+                        const a1=Math.atan2(cur.y-p.y, cur.x-p.x); const a2=Math.atan2(n.y-cur.y, n.x-cur.x);
+                        let diff=Math.abs(a1-a2); if(diff>Math.PI)diff=2*Math.PI-diff;
+                        if(diff>maxAngle) next.push(cur); else changed=true;
+                    }
+                    next.push(pts[pts.length-1]); pts=next;
+                }
+                sec.contours[idx] = pts;
+            });
+            recalcAll(slotId);
+        }
+
+        // --- MATH RECALC ---
+        function recalcAll(slotId) {
+            if (slotId) _calcSlot(slotId); else { _calcSlot(1); _calcSlot(2); }
+            updateResultsDisplay();
+            drawEditor();
+        }
+        function _calcSlot(id) {
+            const sec = appState.sections[id]; if (!sec.loaded) return;
+            const matSelect = document.getElementById('materialSelect'+id); if(!matSelect.value) return;
+            const [g, a] = matSelect.value.split(':');
+            const density = materialsDB[g].alloys[a].density;
+            const scale = parseFloat(document.getElementById('scaleInput'+id).value) || 1.0;
+            const unit = document.getElementById('unitSelect'+id).value;
+            // PASS OFFSET to calculate props based on current position
+            sec.props = calculateProperties(sec.contours, density, scale, unit, sec.offset);
+            sec.thickness = analyzeThickness(sec.contours);
+            if (sec.thickness && sec.thickness.min.vec) sec.props.min_wall_thickness = sec.thickness.min.val * scale;
+        }
+
+        function calculateProperties(contours, density, scale, unit, offset = {x:0, y:0}) {
+            let totalArea = 0, totalSx = 0, totalSy = 0, totalIxx = 0, totalIyy = 0;
+            contours.forEach(points => {
+                let A = 0, Sx = 0, Sy = 0, Ixx = 0, Iyy = 0;
+                const n = points.length;
+                for (let i = 0; i < n - 1; i++) {
+                    const p1 = { x: (points[i].x+offset.x) * scale, y: (points[i].y+offset.y) * scale };
+                    const p2 = { x: (points[i+1].x+offset.x) * scale, y: (points[i+1].y+offset.y) * scale };
+                    const cross = (p1.x * p2.y - p2.x * p1.y);
+                    A += cross; Sx += (p1.y+p2.y)*cross; Sy += (p1.x+p2.x)*cross;
+                    Ixx += (p1.y**2 + p1.y*p2.y + p2.y**2) * cross;
+                    Iyy += (p1.x**2 + p1.x*p2.x + p2.x**2) * cross;
+                }
+                totalArea += A * 0.5; totalSx += Sx/6; totalSy += Sy/6;
+                totalIxx += Ixx/12; totalIyy += Iyy/12;
+            });
+            const absArea = Math.abs(totalArea);
+            let Cx = 0, Cy = 0; if (absArea > 1e-9) { Cx = totalSy / totalArea; Cy = totalSx / totalArea; }
+            const Ixx_c = totalIxx - totalArea * Cy * Cy; const Iyy_c = totalIyy - totalArea * Cx * Cx;
+            let factor = 1; if (unit === 'mm') factor = 1e-6; else if (unit === 'cm') factor = 1e-4; else if (unit === 'in') factor = 0.00064516;
+            return { area: absArea, centroid: { x: Cx, y: Cy }, inertia_centroid: { Ixx: Math.abs(Ixx_c), Iyy: Math.abs(Iyy_c) }, linear_mass_kg_m: absArea * factor * density };
+        }
+
+        function analyzeThickness(contours) {
+            if (contours.length < 2) return null;
+            const contourAreas = contours.map((c, i) => {
+                let A = 0; for(let j=0; j<c.length-1; j++) A += (c[j].x*c[j+1].y - c[j+1].x*c[j].y);
+                return { idx: i, area: Math.abs(A * 0.5) };
+            });
+            contourAreas.sort((a,b) => b.area - a.area);
+            const outerContour = contours[contourAreas[0].idx];
+            let globalMinDist = Infinity; let minVec = null; const allMeasurements = [];
+            for(let i=1; i<contourAreas.length; i++) {
+                const innerPts = contours[contourAreas[i].idx];
+                const stride = innerPts.length > 500 ? 2 : 1;
+                for(let j=0; j<innerPts.length; j+=stride) {
+                    const pInner = innerPts[j];
+                    let localMinDist = Infinity; let localBestPt = null;
+                    for(let k=0; k<outerContour.length-1; k++) {
+                        const res = getClosestPointOnSegment(pInner, outerContour[k], outerContour[k+1]);
+                        if (res.dist < localMinDist) { localMinDist = res.dist; localBestPt = res.pt; }
+                    }
+                    if (localBestPt) {
+                        const m = { p1: pInner, p2: localBestPt, dist: localMinDist };
+                        allMeasurements.push(m);
+                        if (localMinDist < globalMinDist) { globalMinDist = localMinDist; minVec = m; }
+                    }
+                }
+            }
+            return { min: { val: globalMinDist, vec: minVec }, all: allMeasurements };
+        }
+        function getClosestPointOnSegment(p, a, b) {
+            const l2 = (a.x-b.x)**2 + (a.y-b.y)**2; if (l2===0) return { pt: a, dist: Math.sqrt((p.x-a.x)**2 + (p.y-a.y)**2) };
+            let t = ((p.x-a.x)*(b.x-a.x) + (p.y-a.y)*(b.y-a.y)) / l2; t = Math.max(0, Math.min(1, t));
+            const proj = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+            return { pt: proj, dist: Math.sqrt((p.x-proj.x)**2 + (p.y-proj.y)**2) };
+        }
+
+        // --- DRAW ---
+        function drawEditor() {
+            const cv = document.getElementById('previewCanvas'); const ctx = cv.getContext('2d');
+            ctx.clearRect(0,0,cv.width, cv.height);
+            [1, 2].forEach(sid => {
+                const sec = appState.sections[sid]; if(!sec.loaded) return;
+                const colFill = sid===1 ? 'rgba(59, 130, 246, 0.4)' : 'rgba(249, 115, 22, 0.4)';
+                const colStroke = sid===1 ? '#1e40af' : '#9a3412';
+                const ox = sec.offset.x; const oy = sec.offset.y;
+                ctx.beginPath();
+                sec.contours.forEach(pts => {
+                    if(pts.length<2)return;
+                    ctx.moveTo((pts[0].x+ox)*appState.scaleDraw + appState.offX, (pts[0].y+oy)*appState.scaleDraw + appState.offY);
+                    for(let i=1; i<pts.length; i++) ctx.lineTo((pts[i].x+ox)*appState.scaleDraw + appState.offX, (pts[i].y+oy)*appState.scaleDraw + appState.offY);
+                    ctx.closePath();
+                });
+                ctx.fillStyle = colFill; ctx.fill('evenodd');
+                ctx.strokeStyle = colStroke; ctx.lineWidth=1.5; ctx.stroke();
+                // Thickness lines
+                if(sec.thickness && sec.thickness.all) {
+                    ctx.strokeStyle = sid===1 ? 'rgba(30, 64, 175, 0.2)' : 'rgba(154, 52, 18, 0.2)';
+                    ctx.lineWidth=1; ctx.font='9px sans-serif'; ctx.fillStyle = colStroke;
+                    let lastP = {x:-999,y:-999};
+                    sec.thickness.all.forEach(m => {
+                        const sx1 = (m.p1.x+ox)*appState.scaleDraw + appState.offX; const sy1 = (m.p1.y+oy)*appState.scaleDraw + appState.offY;
+                        const sx2 = (m.p2.x+ox)*appState.scaleDraw + appState.offX; const sy2 = (m.p2.y+oy)*appState.scaleDraw + appState.offY;
+                        if(Math.sqrt((sx1-lastP.x)**2+(sy1-lastP.y)**2) > 15) {
+                            ctx.beginPath(); ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke(); lastP={x:sx1, y:sy1};
+                            if(appState.hoverThickness && appState.hoverThickness===m) {
+                                ctx.save(); ctx.strokeStyle='#fbbf24'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(sx1,sy1); ctx.lineTo(sx2,sy2); ctx.stroke(); ctx.restore();
+                            }
+                        }
+                    });
+                    if(sec.thickness.min.vec) {
+                        const m = sec.thickness.min.vec;
+                        const sx1 = (m.p1.x+ox)*appState.scaleDraw + appState.offX; const sy1 = (m.p1.y+oy)*appState.scaleDraw + appState.offY;
+                        const sx2 = (m.p2.x+ox)*appState.scaleDraw + appState.offX; const sy2 = (m.p2.y+oy)*appState.scaleDraw + appState.offY;
+                        ctx.beginPath(); ctx.strokeStyle='#dc2626'; ctx.lineWidth=2.5; ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke();
+                        const val = sec.thickness.min.val * (parseFloat(document.getElementById('scaleInput'+sid).value)||1);
+                        const mx=(sx1+sx2)/2; const my=(sy1+sy2)/2; const txt = `min: ${val.toFixed(2)}`;
+                        const tw = ctx.measureText(txt).width;
+                        ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fillRect(mx-2, my-12, tw+4, 14);
+                        ctx.fillStyle='#dc2626'; ctx.fillText(txt, mx, my);
+                    }
+                }
+                
+                // NEW: Draw Vertices
+                if (appState.activeTool === 'edit') {
+                    ctx.fillStyle = sid===1 ? '#1e3a8a' : '#7c2d12'; // Darker blue/orange
+                    sec.contours.forEach(pts => {
+                        // Optimisation: only draw if reasonable count or maybe small dots
+                        if(pts.length < 1000) { 
+                            pts.forEach(pt => {
+                                ctx.beginPath();
+                                ctx.arc((pt.x+ox)*appState.scaleDraw + appState.offX, (pt.y+oy)*appState.scaleDraw + appState.offY, 3, 0, Math.PI*2);
+                                ctx.fill();
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        function updateResultsDisplay() {
+            const wr = document.getElementById('cardsWrapper');
+            const js = document.getElementById('jsonOutput');
+            const cont = document.getElementById('resultsContainer');
+            if(!appState.sections[1].loaded && !appState.sections[2].loaded) { cont.classList.add('hidden'); return; }
+            cont.classList.remove('hidden'); wr.innerHTML='';
+            const results = {};
+            
+            // Individual Cards
+            [1, 2].forEach(sid => {
+                const sec = appState.sections[sid];
+                if(sec.loaded && sec.props) {
+                    const p = sec.props;
+                    const u = document.getElementById('unitSelect'+sid).value;
+                    const col = sid===1 ? 'border-blue-500' : 'border-orange-500';
+                    const title = sid===1 ? 'SEZIONE A' : 'SEZIONE B';
+                    const minW = p.min_wall_thickness ? `<div class="col-span-2 text-red-600 border-t pt-1 mt-1 font-bold">Min Wall: ${p.min_wall_thickness.toFixed(2)} ${u}</div>` : '';
+                    const d = document.createElement('div');
+                    d.className = `bg-white p-4 border-l-4 shadow-sm rounded border-gray-200 ${col}`;
+                    d.innerHTML = `
+                        <div class="flex justify-between font-bold text-gray-700 border-b pb-2 mb-2"><span>${title}</span> <span class="${sid===1?'text-blue-600':'text-orange-600'}">${p.linear_mass_kg_m.toFixed(3)} kg/m</span></div>
+                        <div class="grid grid-cols-2 gap-2 text-xs text-gray-500">
+                            <div>Area: <b>${p.area.toFixed(2)} ${u}²</b></div>
+                            <div>G (X,Y): <b>${p.centroid.x.toFixed(1)}, ${p.centroid.y.toFixed(1)}</b></div>
+                            <div>Ixx (G): <b>${p.inertia_centroid.Ixx.toExponential(2)}</b></div>
+                            <div>Iyy (G): <b>${p.inertia_centroid.Iyy.toExponential(2)}</b></div>
+                            ${minW}
+                        </div>`;
+                    wr.appendChild(d);
+                    results[`Section_${sid}`] = p;
+                }
+            });
+
+            // Combined Assembly Card (If both loaded)
+            if (appState.sections[1].loaded && appState.sections[2].loaded) {
+                const s1 = appState.sections[1].props;
+                const s2 = appState.sections[2].props;
+                const m1 = s1.linear_mass_kg_m;
+                const m2 = s2.linear_mass_kg_m;
+                const totalM = m1 + m2;
+                
+                // Combined Centroid (Weighted Average)
+                const Gx = (m1 * s1.centroid.x + m2 * s2.centroid.x) / totalM;
+                const Gy = (m1 * s1.centroid.y + m2 * s2.centroid.y) / totalM;
+                
+                // Combined Inertia (Parallel Axis Theorem)
+                // I_tot = (I1 + A1*d1^2) + (I2 + A2*d2^2)
+                // Note: using Area for geometric inertia, Mass for dynamic inertia. 
+                // Engineering usually wants geometric Moment of Inertia (cm4) for stiffness.
+                // So we use Area.
+                const A1 = s1.area; const A2 = s2.area; const totalA = A1 + A2;
+                
+                // Centroid (Geometric) might differ from Mass centroid if densities differ. 
+                // Let's use Geometric Centroid for Inertia calculation.
+                const Gx_geo = (A1 * s1.centroid.x + A2 * s2.centroid.x) / totalA;
+                const Gy_geo = (A1 * s1.centroid.y + A2 * s2.centroid.y) / totalA;
+                
+                const d1x = s1.centroid.x - Gx_geo; const d1y = s1.centroid.y - Gy_geo;
+                const d2x = s2.centroid.x - Gx_geo; const d2y = s2.centroid.y - Gy_geo;
+                
+                const d1_sq = d1x*d1x + d1y*d1y; // Squared distance from combined centroid
+                const d2_sq = d2x*d2x + d2y*d2y;
+                
+                // Ixx is about horizontal axis (depends on Y distance) -> use dy^2
+                // Iyy is about vertical axis (depends on X distance) -> use dx^2
+                // Correct Parallel Axis: I_new = I_old + A * d^2
+                // Here d is the perpendicular distance to the axis.
+                
+                const Ixx_comb = (s1.inertia_centroid.Ixx + A1 * d1y*d1y) + (s2.inertia_centroid.Ixx + A2 * d2y*d2y);
+                const Iyy_comb = (s1.inertia_centroid.Iyy + A1 * d1x*d1x) + (s2.inertia_centroid.Iyy + A2 * d2x*d2x);
+                
+                const u = document.getElementById('unitSelect1').value; // Assume same unit or warn? (Code forces independent units, might be messy if mixed. Assume consistent user)
+
+                const d = document.createElement('div');
+                d.className = `bg-slate-800 text-white p-4 border-l-4 border-indigo-500 shadow-lg rounded`;
+                d.innerHTML = `
+                    <div class="flex justify-between font-bold border-b border-slate-600 pb-2 mb-2">
+                        <span>ASSIEME GLOBALE (A+B)</span> 
+                        <span class="text-indigo-300">${totalM.toFixed(3)} kg/m</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                        <div>Area Tot: <b>${totalA.toFixed(2)} ${u}²</b></div>
+                        <div>G_tot (X,Y): <b>${Gx_geo.toFixed(1)}, ${Gy_geo.toFixed(1)}</b></div>
+                        <div>Ixx_tot: <b>${Ixx_comb.toExponential(2)}</b></div>
+                        <div>Iyy_tot: <b>${Iyy_comb.toExponential(2)}</b></div>
+                    </div>`;
+                wr.appendChild(d);
+                results['Assembly'] = { totalMass: totalM, totalArea: totalA, G: {x:Gx_geo, y:Gy_geo}, Ixx: Ixx_comb, Iyy: Iyy_comb };
+            }
+
+            js.value = JSON.stringify(results, null, 2);
+        }
+
+        // --- PARSING & SPLITTING ---
+        function convertToPathD(el){const t=el.tagName.toLowerCase();if(t==='path')return el.getAttribute('d');if(t==='rect'){const x=parseFloat(el.getAttribute('x'))||0,y=parseFloat(el.getAttribute('y'))||0,w=parseFloat(el.getAttribute('width')),h=parseFloat(el.getAttribute('height'));return`M ${x} ${y} h ${w} v ${h} h ${-w} Z`}if(t==='circle'){const cx=parseFloat(el.getAttribute('cx'))||0,cy=parseFloat(el.getAttribute('cy'))||0,r=parseFloat(el.getAttribute('r'));return`M ${cx-r} ${cy} a ${r} ${r} 0 1 0 ${2*r} 0 a ${r} ${r} 0 1 0 ${-2*r} 0`}if(t==='polygon'||t==='polyline'){let p=el.getAttribute('points');if(!p)return null;return"M "+p.trim().replace(/[\s,]+/g,' ')+(t==='polygon'?" Z":"");}return null;}
+        function getContoursBySplitting(element,samples=500){let fullPathD=element.tagName.toLowerCase()!=='path'?convertToPathD(element):element.getAttribute('d');if(!fullPathD)return[];const subStrings=fullPathD.split(/(?=[Mm])/).filter(s=>s.trim().length>0);const contours=[];const container=document.getElementById('svgHiddenContainer');const tr=element.getAttribute('transform');subStrings.forEach(dStr=>{const temp=document.createElementNS("http://www.w3.org/2000/svg","path");temp.setAttribute('d',dStr);if(tr)temp.setAttribute('transform',tr);container.appendChild(temp);let len=0;try{len=temp.getTotalLength()}catch(e){}let ctm=null;try{ctm=temp.getCTM()}catch(e){}if(len>0.1){const pts=[];const step=len/samples;for(let i=0;i<=len;i+=step){let pt=temp.getPointAtLength(i);if(ctm)pt=pt.matrixTransform(ctm);pts.push({x:pt.x,y:pt.y})}let pt0=temp.getPointAtLength(0);if(ctm)pt0=pt0.matrixTransform(ctm);pts.push({x:pt0.x,y:pt0.y});contours.push(pts)}container.removeChild(temp)});return contours;}
+    </script>
+</body>
+</html>
