@@ -2012,12 +2012,12 @@ class DynamicAnalysis {
                 const Ke = elem.getGlobalStiffness(false);
                 const Me = elem.getMassMatrix();
             
-            const iIdx = this.nodes.indexOf(elem. nodeI);
-            const jIdx = this.nodes.indexOf(elem.nodeJ);
-            const dofs = [
-                iIdx * 3, iIdx * 3 + 1, iIdx * 3 + 2,
-                jIdx * 3, jIdx * 3 + 1, jIdx * 3 + 2
-            ];
+                const iIdx = this.nodes.indexOf(elem.nodeI);
+                const jIdx = this.nodes.indexOf(elem.nodeJ);
+                const dofs = [
+                    iIdx * 3, iIdx * 3 + 1, iIdx * 3 + 2,
+                    jIdx * 3, jIdx * 3 + 1, jIdx * 3 + 2
+                ];
             
                 // Assemblaggio ottimizzato con loop unrolled per piccole matrici
                 for (let i = 0; i < 6; i++) {
