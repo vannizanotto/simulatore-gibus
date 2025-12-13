@@ -2098,7 +2098,7 @@ class DynamicAnalysis {
             
             // Rayleigh quotient: λ = (v'Kv) / (v'Mv)
             const vKv = v.reduce((s, x, i) => s + x * K.multiply(v)[i], 0);
-            const vMv = v. reduce((s, x, i) => s + x * Mv[i], 0);
+            const vMv = v.reduce((s, x, i) => s + x * Mv[i], 0);
             const lambdaNew = vKv / Math.max(1e-15, vMv);
             
             // M-normalize
