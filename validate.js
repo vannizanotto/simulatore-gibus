@@ -227,9 +227,21 @@ if (I_net > 0 && I_net < I_outer) {
 }
 
 // Test case 3: Peterson Kt approximation
+/**
+ * Calculate stress concentration factor Kt for a hole in a finite-width plate
+ * Formula source: Peterson's Stress Concentration Factors
+ * Kt = 3.0 - 3.14(d/W) + 3.667(d/W)² - 1.527(d/W)³
+ * 
+ * Valid range: d/W < 0.5 (for larger ratios, Kt → 3.0 as per infinite plate)
+ * 
+ * @param {number} d - Hole diameter (mm)
+ * @param {number} W - Plate width (mm)
+ * @returns {number} Stress concentration factor Kt (≥ 1.0)
+ */
 const calculateKt_Peterson = (d, W) => {
     if (W <= 0 || d <= 0) return 1.0;
     const ratio = d / W;
+    // For d/W >= 0.5, use Kirsch solution for infinite plate
     if (ratio >= 0.5) return 3.0;
     return 3.0 - 3.14 * ratio + 3.667 * Math.pow(ratio, 2) - 1.527 * Math.pow(ratio, 3);
 };

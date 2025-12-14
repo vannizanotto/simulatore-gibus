@@ -115,7 +115,7 @@ Per ogni file SVG importato, il sistema calcola automaticamente:
 ## Licenza
 
 Questi file di esempio sono forniti per scopi di testing e documentazione.
-Sono parte del progetto [simulatore-gibus](https://github.com/vannizanotto/simulatore-gibus).
+Sono parte del progetto simulatore-gibus.
 
 ---
 
