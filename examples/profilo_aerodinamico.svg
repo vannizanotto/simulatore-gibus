@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- Profilo aerodinamico (Gibus Aero) -->
+  <!-- Dimensioni: ~6.2cm altezza, 3.3cm larghezza -->
+  
+  <!-- Contorno esterno con forma aerodinamica -->
+  <path d="M 50,30 
+           C 60,20 100,20 110,30
+           L 110,90
+           C 100,100 60,100 50,90
+           Z" 
+        fill="none" stroke="#000" stroke-width="0.5"/>
+  
+  <!-- Foro interno -->
+  <path d="M 53,33
+           C 62,25 98,25 107,33
+           L 107,87
+           C 98,95 62,95 53,87
+           Z"
+        fill="none" stroke="#000" stroke-width="0.5"/>
+</svg>

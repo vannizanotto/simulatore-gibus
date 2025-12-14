@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- Spalla/Calcagno pieno -->
+  <!-- Dimensioni: 9.4cm altezza, 4.4cm larghezza -->
+  
+  <!-- Contorno esterno (solo contorno, sezione piena) -->
+  <rect x="40" y="10" width="44" height="94" fill="none" stroke="#000" stroke-width="0.5" rx="2"/>
+</svg>
