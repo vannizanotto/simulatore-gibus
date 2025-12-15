@@ -28,6 +28,9 @@
 </head>
 <body class="flex flex-col h-screen bg-neutral-50 text-neutral-800 overflow-hidden">
 
+    <!-- Hidden container for SVG parsing (required by SVGSectionImporter) -->
+    <div id="svgHiddenContainer" style="width:2000px; height:2000px; position:absolute; top:-9999px; left:-9999px; overflow:hidden;"></div>
+
     <!-- Header -->
     <header class="bg-red-600 text-white p-4 shadow-md flex items-center justify-between shrink-0 border-b-4 border-black z-30">
         <div class="flex items-center gap-3">

@@ -1,49 +1,395 @@
 // ╔══════════════════════════════════════════════════════════════════════════════╗
-// ║  SVG SECTION IMPORTER v1.0 - Modulo riutilizzabile per analisi SVG         ║
+// ║  SVG SECTION IMPORTER v2.0 - Modulo riutilizzabile per analisi SVG         ║
 // ║  ─────────────────────────────────────────────────────────────────────────── ║
-// ║  Importazione SVG con supporto trasformazioni CTM, calcolo proprietà        ║
-// ║  geometriche avanzate, analisi multi-layer e compatibilità FEM v4.1         ║
+// ║  Importazione SVG con funzioni estratte da import_000.html                  ║
+// ║  Parsing completo, Green's theorem, analisi multi-layer, spessore parete    ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
 'use strict';
 
 /**
- * SVGSectionImporter - Classe core per l'importazione e analisi di sezioni SVG
+ * SVGSectionImporter - Modulo completo per parsing e analisi sezioni SVG
  * 
- * Supporta:
- * - Parsing SVG con gestione trasformazioni CTM
- * - Elementi: path, rect, circle, ellipse, polygon, polyline
- * - Calcolo proprietà geometriche (Area, Inerzia, Baricentro)
- * - Logica multi-layer (3 layer: esterno-medio-interno)
- * - Analisi spessore parete minimo
- * - Semplificazione geometria
+ * Funzionalità principali:
+ * 1. Parsing SVG Completo - convertToPathD, getContoursBySplitting
+ * 2. Analisi Geometrica - calculateProperties (Teorema di Green)
+ * 3. Gestione Contorni Multipli - identificazione esterno/interni
+ * 4. Analisi Spessore - analyzeThickness per sezioni cave
  */
-class SVGSectionImporter {
-    constructor(options = {}) {
-        // Set defaults first
-        const defaults = {
-            samplingPoints: 400,
-            unit: 'mm',
-            scale: 1.0,
-            enableLayerDetection: true
+const SVGSectionImporter = {
+    
+    /**
+     * Converte elementi SVG (rect, circle, ellipse, polygon, polyline) in path d
+     * Estratto da import_000.html riga 842
+     */
+    convertToPathD(el) {
+        const t = el.tagName.toLowerCase();
+        
+        if (t === 'path') {
+            return el.getAttribute('d');
+        }
+        
+        if (t === 'rect') {
+            const x = parseFloat(el.getAttribute('x')) || 0;
+            const y = parseFloat(el.getAttribute('y')) || 0;
+            const w = parseFloat(el.getAttribute('width')) || 0;
+            const h = parseFloat(el.getAttribute('height')) || 0;
+            return `M${x},${y} L${x+w},${y} L${x+w},${y+h} L${x},${y+h} Z`;
+        }
+        
+        if (t === 'circle') {
+            const cx = parseFloat(el.getAttribute('cx')) || 0;
+            const cy = parseFloat(el.getAttribute('cy')) || 0;
+            const r = parseFloat(el.getAttribute('r')) || 0;
+            return `M${cx-r},${cy} A${r},${r} 0 1,0 ${cx+r},${cy} A${r},${r} 0 1,0 ${cx-r},${cy} Z`;
+        }
+        
+        if (t === 'ellipse') {
+            const cx = parseFloat(el.getAttribute('cx')) || 0;
+            const cy = parseFloat(el.getAttribute('cy')) || 0;
+            const rx = parseFloat(el.getAttribute('rx')) || 0;
+            const ry = parseFloat(el.getAttribute('ry')) || 0;
+            return `M${cx-rx},${cy} A${rx},${ry} 0 1,0 ${cx+rx},${cy} A${rx},${ry} 0 1,0 ${cx-rx},${cy} Z`;
+        }
+        
+        if (t === 'polygon' || t === 'polyline') {
+            const pts = el.getAttribute('points');
+            if (!pts) return null;
+            const pairs = pts.trim().split(/[\s,]+/);
+            let d = '';
+            for (let i = 0; i < pairs.length; i += 2) {
+                d += (i === 0 ? 'M' : 'L') + pairs[i] + ',' + pairs[i+1] + ' ';
+            }
+            if (t === 'polygon') d += 'Z';
+            return d;
+        }
+        
+        return null;
+    },
+
+    /**
+     * Splitta path SVG in contorni separati con supporto CTM
+     * Estratto da import_000.html riga 843
+     */
+    getContoursBySplitting(element, samples = 500) {
+        let fullPathD = element.tagName.toLowerCase() !== 'path' 
+            ? this.convertToPathD(element) 
+            : element.getAttribute('d');
+        
+        if (!fullPathD) return [];
+        
+        // Split su M/m (nuovi subpath)
+        const subStrings = fullPathD.split(/(?=[Mm])/);
+        const contours = [];
+        
+        // Assicura che esista il container nascosto
+        let container = document.getElementById('svgHiddenContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'svgHiddenContainer';
+            container.style.cssText = 'width:2000px; height:2000px; position:absolute; top:-9999px; left:-9999px; overflow:hidden;';
+            document.body.appendChild(container);
+        }
+        
+        for (const sub of subStrings) {
+            if (!sub.trim()) continue;
+            
+            // Crea path temporaneo per campionamento
+            const tempPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            tempPath.setAttribute("d", sub);
+            
+            // Copia transform se presente
+            const tr = element.getAttribute('transform');
+            if (tr) {
+                tempPath.setAttribute('transform', tr);
+            }
+            
+            // Necessario appendere al DOM per getTotalLength() e getCTM()
+            const tempSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            tempSvg.appendChild(tempPath);
+            container.appendChild(tempSvg);
+            
+            let len = 0;
+            try {
+                len = tempPath.getTotalLength();
+            } catch (e) {
+                console.warn('Error getting path length:', e);
+            }
+            
+            if (len < 1) {
+                container.removeChild(tempSvg);
+                continue;
+            }
+            
+            // Ottieni CTM per trasformazioni
+            let ctm = null;
+            try {
+                ctm = tempPath.getCTM();
+            } catch (e) {
+                console.warn('Error getting CTM:', e);
+            }
+            
+            const points = [];
+            const numSamples = Math.min(samples, Math.max(50, Math.ceil(len / 2)));
+            
+            for (let i = 0; i <= numSamples; i++) {
+                let pt = tempPath.getPointAtLength((i / numSamples) * len);
+                
+                // Applica trasformazione CTM se disponibile
+                if (ctm) {
+                    pt = pt.matrixTransform(ctm);
+                }
+                
+                points.push({ x: pt.x, y: pt.y });
+            }
+            
+            container.removeChild(tempSvg);
+            
+            if (points.length > 2) {
+                contours.push(points);
+            }
+        }
+        
+        return contours;
+    },
+
+    /**
+     * Calcola proprietà geometriche usando il Teorema di Green
+     * Estratto da import_000.html riga 627
+     * @param {Array} contours - Array di contorni (array di punti {x, y})
+     * @param {number} density - Densità materiale (kg/m³)
+     * @param {number} scale - Fattore di scala
+     * @param {string} unit - Unità di misura ('mm', 'cm', 'm', 'in')
+     * @param {Object} offset - Offset {x, y}
+     * @returns {Object} Proprietà: area, centroid, inertia_centroid, linear_mass_kg_m
+     */
+    calculateProperties(contours, density, scale, unit, offset = {x:0, y:0}) {
+        let totalArea = 0, totalSx = 0, totalSy = 0, totalIxx = 0, totalIyy = 0;
+        
+        contours.forEach(points => {
+            let A = 0, Sx = 0, Sy = 0, Ixx = 0, Iyy = 0;
+            const n = points.length;
+            
+            for (let i = 0; i < n - 1; i++) {
+                const p1 = { 
+                    x: (points[i].x + offset.x) * scale, 
+                    y: (points[i].y + offset.y) * scale 
+                };
+                const p2 = { 
+                    x: (points[i+1].x + offset.x) * scale, 
+                    y: (points[i+1].y + offset.y) * scale 
+                };
+                
+                const cross = (p1.x * p2.y - p2.x * p1.y);
+                A += cross;
+                Sx += (p1.y + p2.y) * cross;
+                Sy += (p1.x + p2.x) * cross;
+                Ixx += (p1.y**2 + p1.y*p2.y + p2.y**2) * cross;
+                Iyy += (p1.x**2 + p1.x*p2.x + p2.x**2) * cross;
+            }
+            
+            totalArea += A * 0.5;
+            totalSx += Sx / 6;
+            totalSy += Sy / 6;
+            totalIxx += Ixx / 12;
+            totalIyy += Iyy / 12;
+        });
+        
+        const absArea = Math.abs(totalArea);
+        let Cx = 0, Cy = 0;
+        
+        if (absArea > 1e-9) {
+            Cx = totalSy / totalArea;
+            Cy = totalSx / totalArea;
+        }
+        
+        const Ixx_c = totalIxx - totalArea * Cy * Cy;
+        const Iyy_c = totalIyy - totalArea * Cx * Cx;
+        
+        // Fattore di conversione per massa lineare
+        let factor = 1;
+        if (unit === 'mm') factor = 1e-6;
+        else if (unit === 'cm') factor = 1e-4;
+        else if (unit === 'in') factor = 0.00064516;
+        
+        return {
+            area: absArea,
+            centroid: { x: Cx, y: Cy },
+            inertia_centroid: { Ixx: Math.abs(Ixx_c), Iyy: Math.abs(Iyy_c) },
+            linear_mass_kg_m: absArea * factor * density
+        };
+    },
+
+    /**
+     * Trova il punto più vicino su un segmento
+     * Estratto da import_000.html riga 678
+     */
+    getClosestPointOnSegment(p, a, b) {
+        const l2 = (a.x - b.x)**2 + (a.y - b.y)**2;
+        
+        if (l2 === 0) {
+            return { 
+                pt: a, 
+                dist: Math.sqrt((p.x - a.x)**2 + (p.y - a.y)**2) 
+            };
+        }
+        
+        let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        
+        const proj = {
+            x: a.x + t * (b.x - a.x),
+            y: a.y + t * (b.y - a.y)
         };
         
-        // Merge with provided options, only using defined values
-        this.options = { ...defaults };
-        if (options.samplingPoints !== undefined) this.options.samplingPoints = options.samplingPoints;
-        if (options.unit !== undefined) this.options.unit = options.unit;
-        if (options.scale !== undefined) this.options.scale = options.scale;
-        if (options.enableLayerDetection !== undefined) this.options.enableLayerDetection = options.enableLayerDetection;
+        return {
+            pt: proj,
+            dist: Math.sqrt((p.x - proj.x)**2 + (p.y - proj.y)**2)
+        };
+    },
+
+    /**
+     * Analizza spessore minimo parete tra contorni esterno e interni
+     * Estratto da import_000.html riga 650
+     * @param {Array} contours - Array di contorni
+     * @returns {Object|null} {min: {val, vec}, all: measurements}
+     */
+    analyzeThickness(contours) {
+        if (contours.length < 2) return null;
+        
+        // Calcola area di ogni contorno per identificare esterno vs interni
+        const contourAreas = contours.map((c, i) => {
+            let A = 0;
+            for (let j = 0; j < c.length - 1; j++) {
+                A += (c[j].x * c[j+1].y - c[j+1].x * c[j].y);
+            }
+            return { idx: i, area: Math.abs(A * 0.5) };
+        });
+        
+        contourAreas.sort((a, b) => b.area - a.area);
+        
+        const outerContour = contours[contourAreas[0].idx];
+        let globalMinDist = Infinity;
+        let minVec = null;
+        const allMeasurements = [];
+        
+        // Per ogni contorno interno, trova distanza minima dal contorno esterno
+        for (let i = 1; i < contourAreas.length; i++) {
+            const innerPts = contours[contourAreas[i].idx];
+            const stride = innerPts.length > 500 ? 2 : 1;
+            
+            for (let j = 0; j < innerPts.length; j += stride) {
+                const pInner = innerPts[j];
+                let localMinDist = Infinity;
+                let localBestPt = null;
+                
+                for (let k = 0; k < outerContour.length - 1; k++) {
+                    const res = this.getClosestPointOnSegment(
+                        pInner, 
+                        outerContour[k], 
+                        outerContour[k+1]
+                    );
+                    
+                    if (res.dist < localMinDist) {
+                        localMinDist = res.dist;
+                        localBestPt = res.pt;
+                    }
+                }
+                
+                if (localBestPt) {
+                    const m = {
+                        p1: pInner,
+                        p2: localBestPt,
+                        dist: localMinDist
+                    };
+                    allMeasurements.push(m);
+                    
+                    if (localMinDist < globalMinDist) {
+                        globalMinDist = localMinDist;
+                        minVec = m;
+                    }
+                }
+            }
+        }
+        
+        return {
+            min: { val: globalMinDist, vec: minVec },
+            all: allMeasurements
+        };
+    },
+
+    /**
+     * Crea dati profilo compatibili con state.customProfile di index.html
+     * @param {Array} contours - Array di contorni
+     * @param {Object} bounds - Bounding box {minX, minY, maxX, maxY}
+     * @param {Object} options - Opzioni {name, density, scale, unit}
+     * @returns {Object} Oggetto compatibile con customProfile
+     */
+    createProfileData(contours, bounds, options = {}) {
+        const {
+            name = 'Custom Profile',
+            density = 2700, // kg/m³ default alluminio
+            scale = 1.0,
+            unit = 'mm'
+        } = options;
+        
+        // Calcola proprietà geometriche
+        const props = this.calculateProperties(contours, density, scale, unit);
+        
+        // Calcola dimensioni
+        const width_mm = Math.abs(bounds.maxX - bounds.minX) * scale;
+        const height_mm = Math.abs(bounds.maxY - bounds.minY) * scale;
+        
+        // Analizza spessore se multi-layer
+        let minWallThickness = null;
+        if (contours.length > 1) {
+            const thickness = this.analyzeThickness(contours);
+            if (thickness && thickness.min) {
+                minWallThickness = thickness.min.val * scale;
+            }
+        }
+        
+        // Genera pathData per visualizzazione
+        let pathData = '';
+        contours.forEach((pts, idx) => {
+            if (pts.length < 2) return;
+            pathData += `M${pts[0].x},${pts[0].y} `;
+            for (let i = 1; i < pts.length; i++) {
+                pathData += `L${pts[i].x},${pts[i].y} `;
+            }
+            pathData += 'Z ';
+        });
+        
+        return {
+            name: name,
+            I_mm4: props.inertia_centroid.Ixx, // Usa Ixx come momento principale
+            area_mm2: props.area,
+            height_mm: height_mm,
+            width_mm: width_mm,
+            pathData: pathData.trim(),
+            bounds: bounds,
+            contours: contours, // NUOVO: per analisi spessore
+            min_wall_thickness: minWallThickness // NUOVO: spessore minimo parete
+        };
+    }
+};
+
+/**
+ * SVGProfileManager - Classe wrapper per gestire profili SVG
+ * Mantiene compatibilità con codice esistente
+ */
+class SVGProfileManager {
+    constructor() {
+        this.currentProfile = {
+            beam: null,
+            insert: null
+        };
     }
 
     /**
-     * Importa un file SVG e calcola le proprietà geometriche
-     * @param {string} svgText - Contenuto del file SVG
-     * @param {string} fileName - Nome del file (opzionale)
-     * @param {string} type - Tipo di sezione: 'beam' o 'insert'
-     * @returns {Object} Oggetto con proprietà della sezione
+     * Carica SVG da testo
      */
-    importSVG(svgText, fileName = '', type = 'beam') {
+    loadFromText(svgText, type = 'beam', fileName = 'Custom Profile') {
         try {
             // Parse SVG
             const parser = new DOMParser();
@@ -52,79 +398,75 @@ class SVGSectionImporter {
             if (doc.querySelector('parsererror')) {
                 throw new Error('SVG parsing error: Invalid XML');
             }
-
-            // Crea contenitore nascosto per calcolo CTM
-            const tempDiv = document.createElement('div');
-            tempDiv.style.position = 'absolute';
-            tempDiv.style.visibility = 'hidden';
-            tempDiv.style.pointerEvents = 'none';
-            tempDiv.style.top = '-9999px';
-            tempDiv.style.left = '-9999px';
             
-            const importedSVG = document.importNode(doc.documentElement, true);
+            // Estrai elementi geometrici
+            const svgEl = doc.documentElement;
+            const elements = this._extractElements(svgEl);
+            
+            if (elements.length === 0) {
+                throw new Error('No geometric elements found in SVG');
+            }
+            
+            // Crea contenitore temporaneo nel DOM
+            const tempDiv = document.createElement('div');
+            tempDiv.style.cssText = 'position:absolute; visibility:hidden; top:-9999px; left:-9999px;';
+            const importedSVG = document.importNode(svgEl, true);
             tempDiv.appendChild(importedSVG);
             document.body.appendChild(tempDiv);
             
             try {
-                // Estrai elementi geometrici
-                const elements = this._extractElements(tempDiv);
-                
-                if (elements.length === 0) {
-                    throw new Error('No geometric elements found in SVG');
-                }
-
-                // Converti elementi in contorni con trasformazioni applicate
-                const contours = this._elementsToContours(elements);
-                
-                // Calcola proprietà per ogni contorno
-                const shapes = contours.map((contour, index) => {
-                    return this._calculateShapeProperties(contour);
+                // Converti ogni elemento in contorni
+                const allContours = [];
+                elements.forEach(el => {
+                    const contours = SVGSectionImporter.getContoursBySplitting(el, 500);
+                    allContours.push(...contours);
                 });
-
-                // Ordina per area decrescente
-                shapes.sort((a, b) => b.area - a.area);
-
-                // Selezione layer in base al tipo
-                const selectedShapes = this._selectLayers(shapes, type);
                 
-                // Calcola proprietà complessive
-                const properties = this._combineShapes(selectedShapes);
-                
-                // Analizza spessore minimo (se multi-layer)
-                if (selectedShapes.length > 1) {
-                    properties.minWallThickness = this._analyzeWallThickness(selectedShapes);
+                if (allContours.length === 0) {
+                    throw new Error('No contours extracted from SVG');
                 }
-
-                // Genera path per visualizzazione
-                properties.pathData = this._generatePathData(selectedShapes);
                 
-                // Metadata
-                properties.fileName = fileName;
-                properties.type = type;
-                properties.layerInfo = selectedShapes.layerInfo || `${selectedShapes.length} layer(s)`;
-                properties.contours = selectedShapes.map(s => s.contour);
+                // Calcola bounding box
+                let minX = Infinity, minY = Infinity;
+                let maxX = -Infinity, maxY = -Infinity;
                 
-                return properties;
+                allContours.forEach(contour => {
+                    contour.forEach(pt => {
+                        minX = Math.min(minX, pt.x);
+                        minY = Math.min(minY, pt.y);
+                        maxX = Math.max(maxX, pt.x);
+                        maxY = Math.max(maxY, pt.y);
+                    });
+                });
+                
+                const bounds = { minX, minY, maxX, maxY };
+                
+                // Crea profile data
+                const profileData = SVGSectionImporter.createProfileData(
+                    allContours,
+                    bounds,
+                    { name: fileName, density: 2700, scale: 1.0, unit: 'mm' }
+                );
+                
+                this.currentProfile[type] = profileData;
+                return profileData;
                 
             } finally {
                 document.body.removeChild(tempDiv);
             }
             
         } catch (error) {
-            console.error('SVG import error:', error);
+            console.error('SVG load error:', error);
             throw error;
         }
     }
 
-    /**
-     * Estrae elementi geometrici dall'SVG
-     */
-    _extractElements(container) {
+    _extractElements(svgElement) {
         const selectors = ['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline'];
         const elements = [];
         
         selectors.forEach(selector => {
-            const found = container.querySelectorAll(selector);
+            const found = svgElement.querySelectorAll(selector);
             found.forEach(el => {
                 // Ignora elementi nascosti
                 if (el.getAttribute('display') === 'none' || 
@@ -138,592 +480,33 @@ class SVGSectionImporter {
         return elements;
     }
 
-    /**
-     * Converte elementi SVG in contorni di punti con trasformazioni applicate
-     */
-    _elementsToContours(elements) {
-        const contours = [];
-        
-        elements.forEach(el => {
-            const tagName = el.tagName.toLowerCase();
-            
-            // Converti elemento in path
-            let pathEl = el;
-            if (tagName !== 'path') {
-                pathEl = this._convertToPath(el);
-            }
-            
-            if (!pathEl) return;
-            
-            try {
-                const len = pathEl.getTotalLength();
-                if (len < 0.1) return;
-                
-                const points = [];
-                const numSteps = this.options.samplingPoints;
-                const ctm = pathEl.getCTM();
-                
-                for (let i = 0; i <= numSteps; i++) {
-                    let pt = pathEl.getPointAtLength((i / numSteps) * len);
-                    
-                    // Applica trasformazione CTM
-                    if (ctm) {
-                        pt = pt.matrixTransform(ctm);
-                    }
-                    
-                    points.push({ x: pt.x, y: pt.y });
-                }
-                
-                // Chiudi il contorno
-                if (points.length > 0) {
-                    const first = points[0];
-                    const last = points[points.length - 1];
-                    const dist = Math.sqrt(
-                        (first.x - last.x) ** 2 + (first.y - last.y) ** 2
-                    );
-                    
-                    // Se non è già chiuso, chiudilo
-                    if (dist > 0.1) {
-                        points.push({ x: first.x, y: first.y });
-                    }
-                }
-                
-                contours.push(points);
-                
-            } catch (e) {
-                console.warn('Error processing element:', e);
-            }
-        });
-        
-        return contours;
-    }
-
-    /**
-     * Converte elementi SVG non-path in elementi path
-     */
-    _convertToPath(element) {
-        const tagName = element.tagName.toLowerCase();
-        let pathD = '';
-        
-        switch (tagName) {
-            case 'rect':
-                const x = parseFloat(element.getAttribute('x')) || 0;
-                const y = parseFloat(element.getAttribute('y')) || 0;
-                const w = parseFloat(element.getAttribute('width'));
-                const h = parseFloat(element.getAttribute('height'));
-                pathD = `M ${x} ${y} h ${w} v ${h} h ${-w} Z`;
-                break;
-                
-            case 'circle':
-                const cx = parseFloat(element.getAttribute('cx')) || 0;
-                const cy = parseFloat(element.getAttribute('cy')) || 0;
-                const r = parseFloat(element.getAttribute('r'));
-                pathD = `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
-                break;
-                
-            case 'ellipse':
-                const ecx = parseFloat(element.getAttribute('cx')) || 0;
-                const ecy = parseFloat(element.getAttribute('cy')) || 0;
-                const rx = parseFloat(element.getAttribute('rx'));
-                const ry = parseFloat(element.getAttribute('ry'));
-                pathD = `M ${ecx - rx} ${ecy} a ${rx} ${ry} 0 1 0 ${2 * rx} 0 a ${rx} ${ry} 0 1 0 ${-2 * rx} 0`;
-                break;
-                
-            case 'polygon':
-            case 'polyline':
-                const points = element.getAttribute('points');
-                if (points) {
-                    pathD = 'M ' + points.trim().replace(/[\s,]+/g, ' ');
-                    if (tagName === 'polygon') pathD += ' Z';
-                }
-                break;
-                
-            default:
-                return null;
-        }
-        
-        if (!pathD) return null;
-        
-        // Crea elemento path temporaneo
-        const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        pathEl.setAttribute('d', pathD);
-        
-        // Copia trasformazioni
-        const transform = element.getAttribute('transform');
-        if (transform) {
-            pathEl.setAttribute('transform', transform);
-        }
-        
-        // Inserisci nell'albero DOM per calcolare CTM solo se c'è un parent
-        if (element.parentNode) {
-            element.parentNode.appendChild(pathEl);
-        } else {
-            console.warn('Element has no parent, CTM may not be accurate');
-        }
-        
-        return pathEl;
-    }
-
-    /**
-     * Calcola proprietà geometriche di un singolo contorno usando Green's theorem
-     */
-    _calculateShapeProperties(contour) {
-        let A = 0, Sx = 0, Sy = 0, Ix_raw = 0, Iy_raw = 0;
-        
-        for (let i = 0; i < contour.length - 1; i++) {
-            const p1 = contour[i];
-            const p2 = contour[i + 1];
-            const cross = (p1.x * p2.y - p2.x * p1.y);
-            
-            A += cross;
-            Sx += (p1.x + p2.x) * cross;
-            Sy += (p1.y + p2.y) * cross;
-            Ix_raw += (p1.y * p1.y + p1.y * p2.y + p2.y * p2.y) * cross;
-            Iy_raw += (p1.x * p1.x + p1.x * p2.x + p2.x * p2.x) * cross;
-        }
-        
-        A *= 0.5;
-        Sx *= (1 / 6);
-        Sy *= (1 / 6);
-        Ix_raw *= (1 / 12);
-        Iy_raw *= (1 / 12);
-        
-        // Calcola bounds
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-        
-        contour.forEach(pt => {
-            if (pt.x < minX) minX = pt.x;
-            if (pt.x > maxX) maxX = pt.x;
-            if (pt.y < minY) minY = pt.y;
-            if (pt.y > maxY) maxY = pt.y;
-        });
-        
-        return {
-            area: Math.abs(A),
-            signedArea: A,
-            Sx,
-            Sy,
-            Ix_raw,
-            Iy_raw,
-            contour,
-            bounds: { minX, minY, maxX, maxY }
-        };
-    }
-
-    /**
-     * Seleziona i layer appropriati in base al tipo e al numero di contorni
-     */
-    _selectLayers(shapes, type) {
-        if (!this.options.enableLayerDetection) {
-            return shapes;
-        }
-
-        let selectedShapes = [];
-        let layerInfo = '';
-        
-        if (shapes.length >= 3) {
-            if (type === 'beam') {
-                // Profilo: Area tra Esterno (0) e Medio (1)
-                selectedShapes = [shapes[0], shapes[1]];
-                layerInfo = '3 Layer: Profilo (Est - Med)';
-            } else if (type === 'insert') {
-                // Spalla: Area tra Medio (1) e Interno (2)
-                selectedShapes = [shapes[1], shapes[2]];
-                layerInfo = '3 Layer: Spalla (Med - Int)';
-            }
-        } else if (shapes.length === 2) {
-            // 2 Layer: Esterno - Interno
-            selectedShapes = [shapes[0], shapes[1]];
-            layerInfo = '2 Layer: (Est - Int)';
-        } else if (shapes.length === 1) {
-            // 1 Layer: Solo contorno esterno
-            selectedShapes = [shapes[0]];
-            layerInfo = '1 Layer: Solid';
-        }
-        
-        selectedShapes.layerInfo = layerInfo;
-        return selectedShapes;
-    }
-
-    /**
-     * Combina più shapes calcolando proprietà complessive
-     */
-    _combineShapes(shapes) {
-        // Calcola area totale (differenza tra contorni)
-        let totalArea = 0;
-        let totalSx = 0;
-        let totalSy = 0;
-        let totalIx = 0;
-        let totalIy = 0;
-        
-        shapes.forEach((shape, index) => {
-            const sign = index === 0 ? 1 : -1; // Esterno positivo, interni negativi
-            totalArea += sign * shape.area;
-            totalSx += sign * shape.Sx;
-            totalSy += sign * shape.Sy;
-            totalIx += sign * shape.Ix_raw;
-            totalIy += sign * shape.Iy_raw;
-        });
-        
-        totalArea = Math.abs(totalArea);
-        
-        // Calcola centroide
-        let Cx = 0, Cy = 0;
-        if (Math.abs(totalArea) > 1e-9) {
-            const signedAreaForCentroid = shapes[0].signedArea - 
-                (shapes.length > 1 ? shapes.slice(1).reduce((sum, s) => sum + s.signedArea, 0) : 0);
-            
-            // Check for zero or near-zero signed area
-            if (Math.abs(signedAreaForCentroid) > 1e-9) {
-                Cx = totalSx / signedAreaForCentroid;
-                Cy = totalSy / signedAreaForCentroid;
-            } else {
-                console.warn('Signed area too small for centroid calculation, using approximation');
-                // Fallback: use outer contour bounds center
-                const bounds = shapes[0].bounds;
-                Cx = (bounds.minX + bounds.maxX) / 2;
-                Cy = (bounds.minY + bounds.maxY) / 2;
-            }
-        }
-        
-        // Calcola inerzia rispetto al centroide (teorema di Steiner)
-        const Ixx = totalIx - totalArea * Cy * Cy;
-        const Iyy = totalIy - totalArea * Cx * Cx;
-        
-        // Calcola bounds globali (dal contorno esterno)
-        const bounds = shapes[0].bounds;
-        
-        // Calcola dimensioni
-        const width_mm = (bounds.maxX - bounds.minX) * this.options.scale;
-        const height_mm = (bounds.maxY - bounds.minY) * this.options.scale;
-        
-        // Converti unità
-        const conversionFactor = this._getConversionFactor(this.options.unit);
-        const area_mm2 = totalArea * Math.pow(this.options.scale, 2);
-        const I_mm4 = Math.abs(Ixx) * Math.pow(this.options.scale, 4);
-        
-        return {
-            name: '',
-            area_mm2,
-            I_mm4,
-            width_mm,
-            height_mm,
-            centroid: { x: Cx, y: Cy },
-            inertia: { Ixx: Math.abs(Ixx), Iyy: Math.abs(Iyy) },
-            bounds,
-            shapes
-        };
-    }
-
-    /**
-     * Analizza spessore minimo della parete
-     */
-    _analyzeWallThickness(shapes) {
-        if (shapes.length < 2) return null;
-        
-        const outer = shapes[0].contour;
-        const inner = shapes[1].contour;
-        
-        let minDist = Infinity;
-        let minPoints = null;
-        
-        // Campiona punti del contorno interno
-        const stride = Math.max(1, Math.floor(inner.length / 100));
-        
-        for (let i = 0; i < inner.length; i += stride) {
-            const pt = inner[i];
-            
-            // Trova distanza minima dal contorno esterno
-            for (let j = 0; j < outer.length - 1; j++) {
-                const p1 = outer[j];
-                const p2 = outer[j + 1];
-                
-                const dist = this._pointToSegmentDistance(pt, p1, p2);
-                
-                if (dist < minDist) {
-                    minDist = dist;
-                    minPoints = { inner: pt, outer: this._closestPointOnSegment(pt, p1, p2) };
-                }
-            }
-        }
-        
-        return {
-            value: minDist * this.options.scale,
-            points: minPoints,
-            unit: this.options.unit
-        };
-    }
-
-    /**
-     * Calcola distanza punto-segmento
-     */
-    _pointToSegmentDistance(pt, p1, p2) {
-        const l2 = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
-        if (l2 === 0) return Math.sqrt((pt.x - p1.x) ** 2 + (pt.y - p1.y) ** 2);
-        
-        let t = ((pt.x - p1.x) * (p2.x - p1.x) + (pt.y - p1.y) * (p2.y - p1.y)) / l2;
-        t = Math.max(0, Math.min(1, t));
-        
-        const projX = p1.x + t * (p2.x - p1.x);
-        const projY = p1.y + t * (p2.y - p1.y);
-        
-        return Math.sqrt((pt.x - projX) ** 2 + (pt.y - projY) ** 2);
-    }
-
-    /**
-     * Trova punto più vicino su un segmento
-     */
-    _closestPointOnSegment(pt, p1, p2) {
-        const l2 = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
-        if (l2 === 0) return p1;
-        
-        let t = ((pt.x - p1.x) * (p2.x - p1.x) + (pt.y - p1.y) * (p2.y - p1.y)) / l2;
-        t = Math.max(0, Math.min(1, t));
-        
-        return {
-            x: p1.x + t * (p2.x - p1.x),
-            y: p1.y + t * (p2.y - p1.y)
-        };
-    }
-
-    /**
-     * Genera path SVG per visualizzazione
-     */
-    _generatePathData(shapes) {
-        let pathData = '';
-        
-        shapes.forEach(shape => {
-            const contour = shape.contour;
-            if (contour.length === 0) return;
-            
-            pathData += `M ${contour[0].x.toFixed(3)} ${contour[0].y.toFixed(3)} `;
-            
-            for (let i = 1; i < contour.length; i++) {
-                pathData += `L ${contour[i].x.toFixed(3)} ${contour[i].y.toFixed(3)} `;
-            }
-            
-            pathData += 'Z ';
-        });
-        
-        return pathData.trim();
-    }
-
-    /**
-     * Ottiene fattore di conversione per l'unità specificata (metodo pubblico)
-     * @param {string} unit - Unità di misura ('mm', 'cm', 'm', 'in')
-     * @returns {number} Fattore di conversione
-     */
-    getConversionFactor(unit) {
-        const factors = {
-            'mm': 1,
-            'cm': 10,
-            'm': 1000,
-            'in': 25.4
-        };
-        return factors[unit] || 1;
-    }
-
-    /**
-     * Ottiene fattore di conversione per l'unità configurata (metodo privato)
-     * @private
-     */
-    _getConversionFactor(unit) {
-        return this.getConversionFactor(unit || this.options.unit);
-    }
-
-    /**
-     * Semplifica geometria riducendo il numero di punti
-     */
-    simplifyGeometry(contour, tolerance = 2.0) {
-        if (contour.length < 5) return contour;
-        
-        const simplified = [contour[0]];
-        
-        // Douglas-Peucker algorithm semplificato
-        for (let i = 1; i < contour.length; i++) {
-            const prev = simplified[simplified.length - 1];
-            const curr = contour[i];
-            
-            const dist = Math.sqrt(
-                (curr.x - prev.x) ** 2 + (curr.y - prev.y) ** 2
-            );
-            
-            if (dist >= tolerance) {
-                simplified.push(curr);
-            }
-        }
-        
-        // Assicura che sia chiuso
-        const first = contour[0];
-        const last = simplified[simplified.length - 1];
-        if (Math.abs(first.x - last.x) > 0.001 || Math.abs(first.y - last.y) > 0.001) {
-            simplified.push({ x: first.x, y: first.y });
-        }
-        
-        return simplified;
-    }
-}
-
-/**
- * SVGProfileManager - Interfaccia semplificata per uso in index.html
- * 
- * Fornisce metodi di alto livello per:
- * - Caricamento da file input
- * - Gestione profili custom
- * - Export per FEM
- */
-class SVGProfileManager {
-    constructor(options = {}) {
-        this.importer = new SVGSectionImporter(options);
-        this.currentProfile = {
-            beam: null,
-            insert: null
-        };
-    }
-
-    /**
-     * Carica profilo da file input HTML
-     * @param {HTMLInputElement} fileInput - Input element con file SVG
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     * @returns {Promise<Object>} Promise che risolve con le proprietà del profilo
-     */
-    loadFromFileInput(fileInput, type = 'beam') {
-        return new Promise((resolve, reject) => {
-            const file = fileInput.files[0];
-            if (!file) {
-                reject(new Error('No file selected'));
-                return;
-            }
-
-            const reader = new FileReader();
-            
-            reader.onload = (event) => {
-                try {
-                    const svgText = event.target.result;
-                    const profile = this.importer.importSVG(svgText, file.name, type);
-                    
-                    // Salva profilo corrente
-                    this.currentProfile[type] = profile;
-                    
-                    resolve(profile);
-                } catch (error) {
-                    reject(error);
-                }
-            };
-            
-            reader.onerror = () => {
-                reject(new Error('File reading error'));
-            };
-            
-            reader.readAsText(file);
-        });
-    }
-
-    /**
-     * Carica profilo da testo SVG
-     * @param {string} svgText - Contenuto SVG
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     * @param {string} fileName - Nome file (opzionale)
-     * @returns {Object} Proprietà del profilo
-     */
-    loadFromText(svgText, type = 'beam', fileName = '') {
-        const profile = this.importer.importSVG(svgText, fileName, type);
-        this.currentProfile[type] = profile;
-        return profile;
-    }
-
-    /**
-     * Rimuove profilo corrente
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     */
-    clearProfile(type = 'beam') {
-        this.currentProfile[type] = null;
-    }
-
-    /**
-     * Ottiene profilo corrente
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     * @returns {Object|null} Profilo o null se non caricato
-     */
-    getProfile(type = 'beam') {
-        return this.currentProfile[type];
-    }
-
-    /**
-     * Verifica se un profilo è caricato
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     * @returns {boolean}
-     */
-    hasProfile(type = 'beam') {
-        return this.currentProfile[type] !== null;
-    }
-
-    /**
-     * Esporta dati compatibili con BeamSectionWithHoles (fem_engine_v4.js)
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     * @returns {Object|null} Dati FEM o null se profilo non caricato
-     */
-    exportToFEM(type = 'beam') {
-        const profile = this.currentProfile[type];
-        if (!profile) return null;
-
-        // Conversione unità -> metri usando metodo pubblico
-        const toMeters = this.importer.getConversionFactor(this.importer.options.unit) / 1000;
-        
-        return {
-            // Dimensioni geometriche
-            width: profile.width_mm * toMeters,
-            height: profile.height_mm * toMeters,
-            
-            // Proprietà sezione
-            area: profile.area_mm2 * toMeters * toMeters,
-            I_mm4: profile.I_mm4,
-            inertia: {
-                Ixx: profile.inertia.Ixx * Math.pow(toMeters, 4),
-                Iyy: profile.inertia.Iyy * Math.pow(toMeters, 4)
-            },
-            centroid: {
-                x: profile.centroid.x * toMeters,
-                y: profile.centroid.y * toMeters
-            },
-            
-            // Spessori (stima basata su min wall thickness se disponibile)
-            t_v: profile.minWallThickness ? 
-                profile.minWallThickness.value * toMeters : 
-                profile.width_mm * toMeters * 0.1,
-            t_h: profile.minWallThickness ? 
-                profile.minWallThickness.value * toMeters : 
-                profile.height_mm * toMeters * 0.1,
-            
-            // Metadata
-            pathData: profile.pathData,
-            bounds: profile.bounds,
-            layerInfo: profile.layerInfo,
-            fileName: profile.fileName,
-            type: profile.type
-        };
-    }
-
-    /**
-     * Crea oggetto compatibile con lo stato di index.html
-     * @param {string} type - Tipo: 'beam' o 'insert'
-     * @returns {Object|null} Oggetto customProfile o null
-     */
     toIndexFormat(type = 'beam') {
         const profile = this.currentProfile[type];
         if (!profile) return null;
 
         return {
-            name: profile.fileName || 'Custom Profile',
+            name: profile.name || 'Custom Profile',
             I_mm4: profile.I_mm4,
             area_mm2: profile.area_mm2,
             height_mm: profile.height_mm,
             width_mm: profile.width_mm,
             pathData: profile.pathData,
             bounds: profile.bounds,
-            layerInfo: profile.layerInfo,
-            femData: this.exportToFEM(type)
+            layerInfo: `${profile.contours ? profile.contours.length : 1} layer(s)`,
+            contours: profile.contours,
+            min_wall_thickness: profile.min_wall_thickness
+        };
+    }
+
+    exportToFEM(type = 'beam') {
+        const profile = this.currentProfile[type];
+        if (!profile) return null;
+
+        return {
+            contours: profile.contours,
+            area_mm2: profile.area_mm2,
+            I_mm4: profile.I_mm4,
+            bounds: profile.bounds
         };
     }
 }
