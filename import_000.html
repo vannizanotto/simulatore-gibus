@@ -208,8 +208,8 @@
         // --- GLOBAL STATE ---
         const appState = {
             sections: {
-                1: { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null },
-                2: { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null }
+                1: { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null, validation: null },
+                2: { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null, validation: null }
             },
             scaleDraw: 1, offX: 0, offY: 0,
             activeTool: 'edit', // 'edit' or 'move'
@@ -239,7 +239,7 @@
 
         // --- SECTION MANAGEMENT ---
         function removeSection(id) {
-            appState.sections[id] = { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null };
+            appState.sections[id] = { loaded: false, contours: [], offset: {x:0, y:0}, bounds: {minX:0, maxX:0, minY:0, maxY:0}, thickness: null, props: null, validation: null };
             document.getElementById('fileInput'+id).value = '';
             log(`Slot ${id}: Rimossa.`, 'warn');
             updateLayout();
@@ -539,6 +539,23 @@
             appState.sections[slotId].loaded = true;
             appState.sections[slotId].contours = sectionContours;
             log(`Slot ${slotId}: Caricati ${sectionContours.length} contorni.`, 'success');
+            
+            // Validazione FEM
+            const validation = validateSVGGeometry(slotId);
+            appState.sections[slotId].validation = validation;
+            
+            if (!validation.isValid) {
+                log(`Slot ${slotId}: ⚠️ ERRORI VALIDAZIONE`, 'error');
+                validation.globalErrors.forEach(e => log(`  - ${e}`, 'error'));
+            }
+            if (validation.globalWarnings.length > 0) {
+                log(`Slot ${slotId}: ⚠️ Avvisi validazione`, 'warn');
+                validation.globalWarnings.forEach(w => log(`  - ${w}`, 'warn'));
+            }
+            if (validation.isValid && validation.globalWarnings.length === 0) {
+                log(`Slot ${slotId}: ✅ Geometria valida per FEM`, 'success');
+            }
+            
             recalcBounds(slotId); updateLayout(); recalcAll(slotId);
         }
         function recalcBounds(slotId) {
@@ -836,6 +853,174 @@
             }
 
             js.value = JSON.stringify(results, null, 2);
+        }
+
+        // ==========================================================================
+        // SVG VALIDATION MODULE - Validazione geometria per compatibilità FEM
+        // ==========================================================================
+        /**
+         * Valida un contorno SVG per compatibilità con analisi FEM
+         * @param {Array} contour - Array di punti {x, y}
+         * @returns {Object} Risultato validazione con status e messaggi
+         */
+        function validateContourForFEM(contour) {
+            const validation = {
+                isValid: true,
+                warnings: [],
+                errors: [],
+                metrics: {}
+            };
+            
+            // 1. Verifica numero minimo di punti
+            if (contour.length < 3) {
+                validation.isValid = false;
+                validation.errors.push('Contorno con meno di 3 punti');
+                return validation;
+            }
+            
+            validation.metrics.numPoints = contour.length;
+            
+            // 2. Verifica chiusura contorno
+            const first = contour[0];
+            const last = contour[contour.length - 1];
+            const closureDistance = Math.sqrt(Math.pow(last.x - first.x, 2) + Math.pow(last.y - first.y, 2));
+            validation.metrics.closureDistance = closureDistance;
+            
+            if (closureDistance > 1.0) {
+                validation.warnings.push(`Contorno non completamente chiuso (distanza: ${closureDistance.toFixed(2)})`);
+            }
+            
+            // 3. Verifica auto-intersezioni (semplificato)
+            const hasIntersections = checkSelfIntersections(contour);
+            if (hasIntersections) {
+                validation.isValid = false;
+                validation.errors.push('Rilevate possibili auto-intersezioni nel contorno');
+            }
+            
+            // 4. Verifica complessità ragionevole
+            if (contour.length > 5000) {
+                validation.warnings.push(`Contorno molto complesso (${contour.length} punti). Considerare semplificazione.`);
+            }
+            
+            // 5. Calcola perimetro e area approssimati
+            let perimeter = 0;
+            let area = 0;
+            for (let i = 0; i < contour.length - 1; i++) {
+                const p1 = contour[i];
+                const p2 = contour[i + 1];
+                perimeter += Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                area += (p1.x * p2.y - p2.x * p1.y);
+            }
+            area = Math.abs(area) / 2;
+            
+            validation.metrics.perimeter = perimeter;
+            validation.metrics.area = area;
+            
+            // 6. Verifica dimensioni ragionevoli
+            if (area < 0.01) {
+                validation.warnings.push('Area molto piccola - verificare unità di misura');
+            }
+            
+            if (perimeter / Math.sqrt(area) > 100) {
+                validation.warnings.push('Contorno molto allungato o complesso');
+            }
+            
+            return validation;
+        }
+        
+        /**
+         * Verifica auto-intersezioni semplificata
+         * @param {Array} contour - Array di punti
+         * @returns {boolean} True se ci sono intersezioni
+         */
+        function checkSelfIntersections(contour) {
+            // Implementazione semplificata - controlla solo intersezioni evidenti
+            // Per mesh FEM, intersezioni minori possono essere tollerate
+            const stride = Math.max(1, Math.floor(contour.length / 100));
+            
+            for (let i = 0; i < contour.length - 1; i += stride) {
+                for (let j = i + 2; j < contour.length - 1; j += stride) {
+                    if (Math.abs(i - j) < 2) continue; // Segmenti adiacenti
+                    
+                    const intersects = segmentsIntersect(
+                        contour[i], contour[i + 1],
+                        contour[j], contour[j + 1]
+                    );
+                    
+                    if (intersects) return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        /**
+         * Verifica se due segmenti si intersecano
+         */
+        function segmentsIntersect(p1, p2, p3, p4) {
+            const det = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+            if (Math.abs(det) < 1e-10) return false;
+            
+            const lambda = ((p4.y - p3.y) * (p4.x - p1.x) + (p3.x - p4.x) * (p4.y - p1.y)) / det;
+            const gamma = ((p1.y - p2.y) * (p4.x - p1.x) + (p2.x - p1.x) * (p4.y - p1.y)) / det;
+            
+            return (lambda > 0 && lambda < 1) && (gamma > 0 && gamma < 1);
+        }
+        
+        /**
+         * Valida l'intera geometria SVG caricata
+         * @param {number} slotId - ID dello slot (1 o 2)
+         * @returns {Object} Risultato validazione completa
+         */
+        function validateSVGGeometry(slotId) {
+            const sec = appState.sections[slotId];
+            if (!sec.loaded) {
+                return { isValid: false, errors: ['Nessuna sezione caricata'] };
+            }
+            
+            const results = {
+                isValid: true,
+                contourResults: [],
+                globalWarnings: [],
+                globalErrors: [],
+                summary: {}
+            };
+            
+            // Valida ogni contorno
+            sec.contours.forEach((contour, idx) => {
+                const validation = validateContourForFEM(contour);
+                results.contourResults.push({
+                    index: idx,
+                    ...validation
+                });
+                
+                if (!validation.isValid) {
+                    results.isValid = false;
+                    results.globalErrors.push(`Contorno ${idx + 1}: ${validation.errors.join(', ')}`);
+                }
+                
+                validation.warnings.forEach(w => {
+                    results.globalWarnings.push(`Contorno ${idx + 1}: ${w}`);
+                });
+            });
+            
+            // Verifica numero di contorni
+            if (sec.contours.length === 0) {
+                results.isValid = false;
+                results.globalErrors.push('Nessun contorno valido trovato');
+            } else if (sec.contours.length > 10) {
+                results.globalWarnings.push(`Numero elevato di contorni (${sec.contours.length}). Potrebbe rallentare l'analisi FEM.`);
+            }
+            
+            // Summary
+            results.summary = {
+                numContours: sec.contours.length,
+                totalPoints: sec.contours.reduce((sum, c) => sum + c.length, 0),
+                hasErrors: results.globalErrors.length > 0,
+                hasWarnings: results.globalWarnings.length > 0
+            };
+            
+            return results;
         }
 
         // --- PARSING & SPLITTING ---

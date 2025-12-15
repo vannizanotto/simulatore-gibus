@@ -2454,6 +2454,363 @@ class LocalMeshRefinement {
 }
 
 // ============================================================================
+// CLASSE SVGProfileImporter - IMPORT PROFILI SVG PER ANALISI FEM (v4.1 NUOVO)
+// ============================================================================
+/**
+ * Classe per importazione e conversione di profili/spalle SVG in sezioni FEM
+ * Integrazione con import_000.html per workflow completo SVG → FEM
+ * 
+ * FUNZIONALITÀ:
+ * - Importazione dati JSON da import_000.html
+ * - Conversione automatica in BeamSection/BeamSectionWithHoles
+ * - Validazione compatibilità geometrica e materiale
+ * - Ottimizzazione contorni per mesh FEM
+ * - Mappatura materiali da database import_000 a MATERIALS_V4
+ * 
+ * UTILIZZO:
+ * ```javascript
+ * const importer = new SVGProfileImporter();
+ * const importData = JSON.parse(clipboardJSON); // Da import_000.html
+ * const section = importer.createSectionFromImport(importData.sections[0]);
+ * // section è ora pronto per simulazione FEM
+ * ```
+ */
+class SVGProfileImporter {
+    constructor() {
+        this.materialMapping = this._buildMaterialMapping();
+        this.validationResults = [];
+    }
+    
+    /**
+     * Mappa materiali da import_000.html a MATERIALS_V4
+     * @private
+     */
+    _buildMaterialMapping() {
+        // Mappa chiavi materiali da import_000 (es. "6061-T6") a MATERIALS_V4
+        return {
+            '6060-T4': '6060-T4',
+            '6060-T5': '6060-T6', // Fallback T6
+            '6060-T6': '6060-T6',
+            '6061-T4': '6061-T4',
+            '6061-T6': '6061-T6',
+            '6063-T5': '6063-T6',
+            '6063-T6': '6063-T6',
+            '6005A-T6': '6082-T6', // Approssimazione - proprietà simili
+            '6082-T6': '6082-T6',
+            '6082-O': '6060-T4',  // Approssimazione ricotto
+            '1050A-H14': '6060-T4', // Approssimazione bassa resistenza
+            '1050A-O': '6060-T4',
+            '5083-H111': '6061-T6', // Approssimazione strutturale
+            '5083-H321': '6082-T6',
+            '46100-F': '46100-F',
+            '46000-F': '46000-F',
+            '44300-F': '46100-F',
+            'ZAMAK5-F': 'ZA-27',
+            'ZAMAK3-F': 'ZA-27',
+            'AZ91D-F': '6060-T4', // Magnesio → fallback alluminio (warning)
+            '42100-T6': '42100-T6',
+            '42100-T4': '42100-T6',
+            '43000-T6': '42100-T6',
+            '43000-F': '46100-F',
+            '44100-F': '46100-F',
+            '51300-F': '46100-F',
+            '7075-T6': '7075-T6',
+            '2024-T3': '2024-T3',
+            '2024-T4': '2024-T3',
+            '5754-H111': '6061-T6'
+        };
+    }
+    
+    /**
+     * Valida dati importati da SVG
+     * @param {Object} importData - Dati da import_000.html
+     * @returns {Object} Risultato validazione
+     */
+    validateImportData(importData) {
+        const validation = {
+            isValid: true,
+            errors: [],
+            warnings: [],
+            info: []
+        };
+        
+        // 1. Verifica struttura dati
+        if (!importData || typeof importData !== 'object') {
+            validation.isValid = false;
+            validation.errors.push('Dati importazione non validi');
+            return validation;
+        }
+        
+        // 2. Verifica versione compatibilità
+        if (importData.femEngineVersion && importData.femEngineVersion !== '4.1') {
+            validation.warnings.push(`Versione FEM differente: ${importData.femEngineVersion} vs 4.1`);
+        }
+        
+        // 3. Verifica proprietà geometriche richieste
+        const requiredProps = ['width', 'height', 'area', 'materialKey'];
+        requiredProps.forEach(prop => {
+            if (!importData[prop] && importData[prop] !== 0) {
+                validation.errors.push(`Proprietà mancante: ${prop}`);
+                validation.isValid = false;
+            }
+        });
+        
+        // 4. Verifica dimensioni ragionevoli
+        if (importData.width) {
+            if (importData.width < 0.001 || importData.width > 1.0) {
+                validation.warnings.push(`Larghezza inusuale: ${importData.width} m`);
+            }
+        }
+        if (importData.height) {
+            if (importData.height < 0.001 || importData.height > 1.0) {
+                validation.warnings.push(`Altezza inusuale: ${importData.height} m`);
+            }
+        }
+        if (importData.area) {
+            if (importData.area < 1e-8 || importData.area > 0.1) {
+                validation.warnings.push(`Area inusuale: ${importData.area} m²`);
+            }
+        }
+        
+        // 5. Verifica materiale
+        const matKey = importData.materialKey;
+        if (matKey) {
+            if (!this.materialMapping[matKey]) {
+                validation.warnings.push(`Materiale non mappato: ${matKey}. Verrà usato default.`);
+            }
+            const mappedKey = this.materialMapping[matKey] || '6061-T6';
+            if (!MATERIALS_V4[mappedKey]) {
+                validation.errors.push(`Materiale mappato non trovato in MATERIALS_V4: ${mappedKey}`);
+                validation.isValid = false;
+            }
+        }
+        
+        // 6. Info
+        if (importData.slotId) {
+            validation.info.push(`Slot origine: ${importData.slotId}`);
+        }
+        if (importData.timestamp) {
+            validation.info.push(`Timestamp: ${new Date(importData.timestamp).toLocaleString()}`);
+        }
+        
+        return validation;
+    }
+    
+    /**
+     * Crea BeamSection da dati importati SVG
+     * @param {Object} importData - Singola sezione da import_000.html
+     * @param {Object} options - Opzioni aggiuntive
+     * @returns {BeamSection|BeamSectionWithHoles} Sezione FEM pronta
+     */
+    createSectionFromImport(importData, options = {}) {
+        // Validazione
+        const validation = this.validateImportData(importData);
+        this.validationResults.push(validation);
+        
+        if (!validation.isValid) {
+            throw new Error(`Validazione fallita: ${validation.errors.join(', ')}`);
+        }
+        
+        // Log warnings
+        if (validation.warnings.length > 0) {
+            console.warn('SVGProfileImporter - Avvisi:', validation.warnings);
+        }
+        
+        // Mappa materiale
+        let materialKey = '6061-T6'; // Default
+        if (importData.materialKey) {
+            materialKey = this.materialMapping[importData.materialKey] || materialKey;
+        }
+        
+        // Parametri sezione base
+        const sectionParams = {
+            type: 'hollow_rect',
+            width: importData.width,
+            height: importData.height,
+            t_v: importData.t_v || (importData.width * 0.1),
+            t_h: importData.t_h || (importData.height * 0.1),
+            fillet: options.fillet || 0,
+            ledGroove: options.ledGroove || false
+        };
+        
+        // Se ci sono fori, usa BeamSectionWithHoles
+        if (options.addHoles && options.numHoles > 0) {
+            return new BeamSectionWithHoles({
+                ...sectionParams,
+                numHoles: options.numHoles,
+                holeDiameter_mm: options.holeDiameter_mm || 4.2,
+                holeSpacing_mm: options.holeSpacing_mm || 50,
+                materialKey: materialKey,
+                notchRadius_mm: options.notchRadius_mm || 0.5
+            });
+        }
+        
+        // Altrimenti BeamSection standard
+        return new BeamSection(sectionParams);
+    }
+    
+    /**
+     * Importa batch di sezioni da export JSON di import_000.html
+     * @param {Object} exportData - Dati completi da import_000.html (con array sections)
+     * @param {Object} options - Opzioni per tutte le sezioni
+     * @returns {Array} Array di BeamSection create
+     */
+    importBatch(exportData, options = {}) {
+        if (!exportData.sections || !Array.isArray(exportData.sections)) {
+            throw new Error('exportData.sections deve essere un array');
+        }
+        
+        const sections = [];
+        exportData.sections.forEach((sectionData, idx) => {
+            try {
+                const section = this.createSectionFromImport(sectionData, options);
+                sections.push({
+                    section: section,
+                    slotId: sectionData.slotId || idx + 1,
+                    metadata: {
+                        originalUnit: sectionData.originalUnit,
+                        scale: sectionData.scale,
+                        materialKey: sectionData.materialKey
+                    }
+                });
+            } catch (err) {
+                console.error(`Errore import sezione ${idx}:`, err);
+            }
+        });
+        
+        return sections;
+    }
+    
+    /**
+     * Ottimizza contorni SVG per mesh FEM
+     * Riduce punti ridondanti mantenendo accuratezza geometrica
+     * @param {Array} contours - Array di contorni (array di punti {x, y})
+     * @param {Object} options - Opzioni ottimizzazione
+     * @returns {Array} Contorni ottimizzati
+     */
+    optimizeContoursForFEM(contours, options = {}) {
+        const tolerance = options.tolerance || 0.5; // mm
+        const maxPoints = options.maxPoints || 200;  // punti massimi per contorno
+        
+        return contours.map(contour => {
+            if (contour.length <= maxPoints) {
+                return contour; // Già abbastanza semplice
+            }
+            
+            // Douglas-Peucker semplificato
+            const simplified = this._simplifyDouglasPeucker(contour, tolerance);
+            
+            // Se ancora troppo complesso, campiona uniformemente
+            if (simplified.length > maxPoints) {
+                const step = Math.ceil(simplified.length / maxPoints);
+                const sampled = [];
+                for (let i = 0; i < simplified.length; i += step) {
+                    sampled.push(simplified[i]);
+                }
+                // Assicura chiusura
+                if (sampled.length > 0) {
+                    sampled.push({...sampled[0]});
+                }
+                return sampled;
+            }
+            
+            return simplified;
+        });
+    }
+    
+    /**
+     * Algoritmo Douglas-Peucker per semplificazione contorni
+     * @private
+     */
+    _simplifyDouglasPeucker(points, tolerance) {
+        if (points.length <= 2) return points;
+        
+        // Trova punto più distante dalla linea start-end
+        let maxDist = 0;
+        let maxIndex = 0;
+        const start = points[0];
+        const end = points[points.length - 1];
+        
+        for (let i = 1; i < points.length - 1; i++) {
+            const dist = this._perpendicularDistance(points[i], start, end);
+            if (dist > maxDist) {
+                maxDist = dist;
+                maxIndex = i;
+            }
+        }
+        
+        // Se la distanza massima è minore della tolleranza, semplifica a linea
+        if (maxDist < tolerance) {
+            return [start, end];
+        }
+        
+        // Altrimenti, ricorri su entrambe le parti
+        const left = this._simplifyDouglasPeucker(points.slice(0, maxIndex + 1), tolerance);
+        const right = this._simplifyDouglasPeucker(points.slice(maxIndex), tolerance);
+        
+        // Combina risultati (rimuovi duplicato al punto di giunzione)
+        return left.slice(0, -1).concat(right);
+    }
+    
+    /**
+     * Calcola distanza perpendicolare punto-linea
+     * @private
+     */
+    _perpendicularDistance(point, lineStart, lineEnd) {
+        const dx = lineEnd.x - lineStart.x;
+        const dy = lineEnd.y - lineStart.y;
+        const lenSq = dx * dx + dy * dy;
+        
+        if (lenSq === 0) {
+            // Linea degenere
+            const pdx = point.x - lineStart.x;
+            const pdy = point.y - lineStart.y;
+            return Math.sqrt(pdx * pdx + pdy * pdy);
+        }
+        
+        // Parametro t per proiezione
+        let t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        
+        // Punto proiettato
+        const projX = lineStart.x + t * dx;
+        const projY = lineStart.y + t * dy;
+        
+        // Distanza
+        const distX = point.x - projX;
+        const distY = point.y - projY;
+        return Math.sqrt(distX * distX + distY * distY);
+    }
+    
+    /**
+     * Helper: crea sezione da JSON clipboard
+     * @param {string} jsonString - JSON copiato da import_000.html
+     * @param {Object} options - Opzioni aggiuntive
+     * @returns {Array} Array di sezioni importate
+     */
+    static fromClipboard(jsonString, options = {}) {
+        const importer = new SVGProfileImporter();
+        const data = JSON.parse(jsonString);
+        return importer.importBatch(data, options);
+    }
+    
+    /**
+     * Ottiene risultati validazione ultima importazione
+     * @returns {Array} Array di risultati validazione
+     */
+    getValidationResults() {
+        return this.validationResults;
+    }
+    
+    /**
+     * Reset risultati validazione
+     */
+    clearValidationResults() {
+        this.validationResults = [];
+    }
+}
+
+// ============================================================================
 // ESPORTAZIONE GLOBALE (per uso in browser)
 // ============================================================================
 if (typeof window !== 'undefined') {
@@ -2466,6 +2823,7 @@ if (typeof window !== 'undefined') {
     window.BeamSectionWithHoles = BeamSectionWithHoles;
     window.LocalMeshRefinement = LocalMeshRefinement; // NUOVO v4.1
     window.DynamicAnalysis = DynamicAnalysis;         // EXPORT esplicito v4.1
+    window.SVGProfileImporter = SVGProfileImporter;   // NUOVO v4.1 - Import SVG
     window.MATERIALS_V4 = MATERIALS_V4;
     window.EC9_CONSTANTS = EC9_CONSTANTS;
     window.HOLE_ANALYSIS_CONSTANTS = HOLE_ANALYSIS_CONSTANTS;

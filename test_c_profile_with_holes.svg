@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="100" viewBox="0 0 150 100">
+    <!-- Profilo a C - tipico per bracci estensibili -->
+    <!-- Dimensioni: 80x50mm esterni, spessore 2.5mm -->
+    <path d="M 30 20 L 110 20 L 110 22.5 L 32.5 22.5 L 32.5 67.5 L 110 67.5 L 110 70 L 30 70 Z" 
+          fill="#e0e0e0" stroke="#333" stroke-width="0.5"/>
+    <!-- Fori per fissaggio (3 fori Ø4mm) -->
+    <circle cx="50" cy="45" r="2" fill="white" stroke="#999"/>
+    <circle cx="70" cy="45" r="2" fill="white" stroke="#999"/>
+    <circle cx="90" cy="45" r="2" fill="white" stroke="#999"/>
+</svg>

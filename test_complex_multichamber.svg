@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="100" viewBox="0 0 120 100">
+    <!-- Profilo complesso con nervature interne -->
+    <!-- Simulazione sezione estrusa con camere multiple -->
+    
+    <!-- Contorno esterno -->
+    <rect x="10" y="10" width="100" height="80" fill="none" stroke="black" stroke-width="1"/>
+    
+    <!-- Camera superiore -->
+    <rect x="13" y="13" width="94" height="25" fill="white" stroke="black" stroke-width="0.5"/>
+    
+    <!-- Nervatura orizzontale centrale -->
+    <rect x="13" y="40" width="94" height="2" fill="black"/>
+    
+    <!-- Camera inferiore sinistra -->
+    <rect x="13" y="44" width="45" height="43" fill="white" stroke="black" stroke-width="0.5"/>
+    
+    <!-- Camera inferiore destra -->
+    <rect x="60" y="44" width="47" height="43" fill="white" stroke="black" stroke-width="0.5"/>
+    
+    <!-- Nervatura verticale centrale -->
+    <rect x="58" y="44" width="2" height="43" fill="black"/>
+</svg>

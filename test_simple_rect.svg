@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80" viewBox="0 0 100 80">
+    <!-- Profilo rettangolare semplice 60x40mm (esterno) con spessore 3mm -->
+    <!-- Contorno esterno -->
+    <rect x="20" y="20" width="60" height="40" fill="none" stroke="black" stroke-width="1"/>
+    <!-- Contorno interno (cavo) -->
+    <rect x="23" y="23" width="54" height="34" fill="white" stroke="black" stroke-width="1"/>
+</svg>
