@@ -12,12 +12,48 @@ Simulatore avanzato basato su metodo FEM (Finite Element Method) per l'analisi s
 
 ## 📁 File Principali
 
+- **`svg_section_importer.js`** - Modulo riutilizzabile per import SVG (NUOVO)
 - **`import_000.html`** - Sistema di import SVG e analisi sezioni
 - **`index.html`** - Simulatore principale per bracci estensibili
 - **`fem_engine_v4.js`** - Motore FEM con analisi avanzata fori
 - **`tests.html`** - Suite di test automatizzati
 - **`examples/`** - File SVG di esempio
 - **`ESEMPI_UTILIZZO.md`** - Guida completa con esempi
+
+## 🆕 SVG Section Importer Module
+
+Il nuovo modulo `svg_section_importer.js` fornisce funzionalità riutilizzabili per l'importazione e analisi di profili SVG:
+
+### Caratteristiche
+
+- **Parsing SVG Avanzato**: Supporto per path, rect, circle, ellipse, polygon, polyline
+- **Trasformazioni CTM**: Applicazione corretta di tutte le trasformazioni SVG
+- **Multi-Layer Detection**: Riconoscimento automatico profilo/spalla (3 layer)
+- **Proprietà Geometriche**: Calcolo automatico di Area, Inerzia, Baricentro
+- **Analisi Spessori**: Rilevamento spessore minimo parete
+- **Export FEM**: Compatibilità con BeamSectionWithHoles (fem_engine_v4.js)
+
+### Utilizzo
+
+```javascript
+// Crea istanza del manager
+const manager = new SVGProfileManager({
+    samplingPoints: 400,
+    unit: 'mm',
+    scale: 1.0
+});
+
+// Carica da file input
+manager.loadFromFileInput(fileInput, 'beam')
+    .then(profile => {
+        console.log('Area:', profile.area_mm2, 'mm²');
+        console.log('Inerzia:', profile.I_mm4, 'mm⁴');
+        console.log('Layer:', profile.layerInfo);
+    });
+
+// Export per FEM
+const femData = manager.exportToFEM('beam');
+```
 
 ## 🚀 Quick Start
 
