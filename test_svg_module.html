@@ -101,12 +101,33 @@
         // Test 1: Module Loading
         const test1Result = document.getElementById('test1-result');
         try {
-            const importer = new SVGSectionImporter();
+            // SVGSectionImporter is now an object with static methods, not a constructor
+            if (typeof SVGSectionImporter !== 'object') {
+                throw new Error('SVGSectionImporter not found or wrong type');
+            }
+            
+            // Verify critical functions exist
+            const requiredFunctions = [
+                'convertToPathD',
+                'getContoursBySplitting', 
+                'calculateProperties',
+                'analyzeThickness',
+                'getClosestPointOnSegment',
+                'createProfileData'
+            ];
+            
+            for (const func of requiredFunctions) {
+                if (typeof SVGSectionImporter[func] !== 'function') {
+                    throw new Error(`Missing function: ${func}`);
+                }
+            }
+            
             const manager = new SVGProfileManager();
             
             test1Result.innerHTML = `
-                ✓ SVGSectionImporter class: OK<br>
+                ✓ SVGSectionImporter module: OK<br>
                 ✓ SVGProfileManager class: OK<br>
+                ✓ All functions present: ${requiredFunctions.join(', ')}<br>
                 ✓ Module loaded successfully!
             `;
             test1Result.style.borderLeftColor = '#4CAF50';
