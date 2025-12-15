@@ -20,13 +20,20 @@
  */
 class SVGSectionImporter {
     constructor(options = {}) {
-        this.options = {
-            samplingPoints: options.samplingPoints || 400,
-            unit: options.unit || 'mm',
-            scale: options.scale || 1.0,
-            enableLayerDetection: options.enableLayerDetection !== false,
-            ...options
+        // Set defaults first
+        const defaults = {
+            samplingPoints: 400,
+            unit: 'mm',
+            scale: 1.0,
+            enableLayerDetection: true
         };
+        
+        // Merge with provided options, only using defined values
+        this.options = { ...defaults };
+        if (options.samplingPoints !== undefined) this.options.samplingPoints = options.samplingPoints;
+        if (options.unit !== undefined) this.options.unit = options.unit;
+        if (options.scale !== undefined) this.options.scale = options.scale;
+        if (options.enableLayerDetection !== undefined) this.options.enableLayerDetection = options.enableLayerDetection;
     }
 
     /**
@@ -247,8 +254,12 @@ class SVGSectionImporter {
             pathEl.setAttribute('transform', transform);
         }
         
-        // Inserisci nell'albero DOM per calcolare CTM
-        element.parentNode.appendChild(pathEl);
+        // Inserisci nell'albero DOM per calcolare CTM solo se c'è un parent
+        if (element.parentNode) {
+            element.parentNode.appendChild(pathEl);
+        } else {
+            console.warn('Element has no parent, CTM may not be accurate');
+        }
         
         return pathEl;
     }
@@ -362,8 +373,18 @@ class SVGSectionImporter {
         if (Math.abs(totalArea) > 1e-9) {
             const signedAreaForCentroid = shapes[0].signedArea - 
                 (shapes.length > 1 ? shapes.slice(1).reduce((sum, s) => sum + s.signedArea, 0) : 0);
-            Cx = totalSx / signedAreaForCentroid;
-            Cy = totalSy / signedAreaForCentroid;
+            
+            // Check for zero or near-zero signed area
+            if (Math.abs(signedAreaForCentroid) > 1e-9) {
+                Cx = totalSx / signedAreaForCentroid;
+                Cy = totalSy / signedAreaForCentroid;
+            } else {
+                console.warn('Signed area too small for centroid calculation, using approximation');
+                // Fallback: use outer contour bounds center
+                const bounds = shapes[0].bounds;
+                Cx = (bounds.minX + bounds.maxX) / 2;
+                Cy = (bounds.minY + bounds.maxY) / 2;
+            }
         }
         
         // Calcola inerzia rispetto al centroide (teorema di Steiner)
@@ -489,9 +510,11 @@ class SVGSectionImporter {
     }
 
     /**
-     * Ottiene fattore di conversione per l'unità specificata
+     * Ottiene fattore di conversione per l'unità specificata (metodo pubblico)
+     * @param {string} unit - Unità di misura ('mm', 'cm', 'm', 'in')
+     * @returns {number} Fattore di conversione
      */
-    _getConversionFactor(unit) {
+    getConversionFactor(unit) {
         const factors = {
             'mm': 1,
             'cm': 10,
@@ -499,6 +522,14 @@ class SVGSectionImporter {
             'in': 25.4
         };
         return factors[unit] || 1;
+    }
+
+    /**
+     * Ottiene fattore di conversione per l'unità configurata (metodo privato)
+     * @private
+     */
+    _getConversionFactor(unit) {
+        return this.getConversionFactor(unit || this.options.unit);
     }
 
     /**
@@ -637,8 +668,8 @@ class SVGProfileManager {
         const profile = this.currentProfile[type];
         if (!profile) return null;
 
-        // Conversione unità -> metri
-        const toMeters = this.importer._getConversionFactor(this.importer.options.unit) / 1000;
+        // Conversione unità -> metri usando metodo pubblico
+        const toMeters = this.importer.getConversionFactor(this.importer.options.unit) / 1000;
         
         return {
             // Dimensioni geometriche
