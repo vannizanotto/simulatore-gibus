@@ -480,6 +480,32 @@ class SVGProfileManager {
         return elements;
     }
 
+    /**
+     * Carica SVG da file input (per compatibilità con test esistenti)
+     */
+    async loadFromFileInput(fileInput, type = 'beam') {
+        return new Promise((resolve, reject) => {
+            const file = fileInput.files[0];
+            if (!file) {
+                reject(new Error('No file selected'));
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const svgText = e.target.result;
+                    const profile = this.loadFromText(svgText, type, file.name);
+                    resolve(profile);
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            reader.onerror = () => reject(new Error('File read error'));
+            reader.readAsText(file);
+        });
+    }
+
     toIndexFormat(type = 'beam') {
         const profile = this.currentProfile[type];
         if (!profile) return null;
@@ -506,7 +532,14 @@ class SVGProfileManager {
             contours: profile.contours,
             area_mm2: profile.area_mm2,
             I_mm4: profile.I_mm4,
-            bounds: profile.bounds
+            bounds: profile.bounds,
+            width: profile.width_mm / 1000, // Convert to meters
+            height: profile.height_mm / 1000, // Convert to meters
+            t_v: (profile.min_wall_thickness || 3) / 1000, // Wall thickness in meters
+            centroid: {
+                x: 0, // Placeholder - would need to be calculated from properties
+                y: 0
+            }
         };
     }
 }
