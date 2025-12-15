@@ -616,7 +616,17 @@
     <!-- MOTORE FEM v4.0 - Classi avanzate per analisi fori (caricato PRIMA del codice inline) -->
     <script src="fem_engine_v4.js"></script>
     
+    <!-- SVG Section Importer - Modulo per importazione profili SVG -->
+    <script src="svg_section_importer.js"></script>
+    
     <script>
+        // Inizializza SVG Profile Manager globale
+        const svgProfileManager = new SVGProfileManager({
+            samplingPoints: 400,
+            unit: 'mm',
+            scale: 1.0,
+            enableLayerDetection: true
+        });
         const MATERIALS = {
             '6060-T4': { E: 68.0, yield: 65, tensile: 130, name: "6060 T4" },
             '6060-T6': { E: 69.0, yield: 150, tensile: 190, name: "6060 T6" },
@@ -749,203 +759,105 @@
             update();
         }
 
-        // SVG HANDLING FIXED
+        // SVG HANDLING - Using SVGProfileManager
         function handleFileUpload(e, type) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(event) { processSVG(event.target.result, file.name, type); };
-            reader.readAsText(file);
+            const fileInput = e.target;
+            if (!fileInput.files || !fileInput.files[0]) return;
+            
+            // Usa SVGProfileManager per caricare il profilo
+            svgProfileManager.loadFromFileInput(fileInput, type)
+                .then(profile => {
+                    // Converti nel formato richiesto da index.html
+                    const profileData = svgProfileManager.toIndexFormat(type);
+                    
+                    if (type === 'beam') {
+                        state.customProfile = profileData;
+                        if (ui.displays.svgName) {
+                            const displayName = profileData.name.length > 15 ? 
+                                profileData.name.substring(0, 12) + "..." : 
+                                profileData.name;
+                            ui.displays.svgName.textContent = displayName;
+                        }
+                        if (ui.displays.svgInertia) {
+                            const I_cm4 = profileData.I_mm4 / 10000;
+                            ui.displays.svgInertia.textContent = I_cm4.toFixed(2);
+                        }
+                        if (ui.displays.beamLayerInfo) {
+                            ui.displays.beamLayerInfo.textContent = profileData.layerInfo || '';
+                        }
+                        if (ui.controls.manualGeom) ui.controls.manualGeom.classList.add('disabled-group');
+                        if (ui.controls.profileInfo) ui.controls.profileInfo.classList.remove('hidden');
+                        if (ui.controls.btnClearSvg) ui.controls.btnClearSvg.classList.remove('hidden');
+                        setPreviewMode('beam');
+                    } else {
+                        state.customInsertProfile = profileData;
+                        if (ui.displays.svgInsertName) {
+                            const displayName = profileData.name.length > 15 ? 
+                                profileData.name.substring(0, 12) + "..." : 
+                                profileData.name;
+                            ui.displays.svgInsertName.textContent = displayName;
+                        }
+                        if (ui.displays.svgInsertInertia) {
+                            const I_cm4 = profileData.I_mm4 / 10000;
+                            ui.displays.svgInsertInertia.textContent = I_cm4.toFixed(2);
+                        }
+                        if (ui.displays.insertLayerInfo) {
+                            ui.displays.insertLayerInfo.textContent = profileData.layerInfo || '';
+                        }
+                        if (ui.controls.manualInsert) ui.controls.manualInsert.classList.add('disabled-group');
+                        if (ui.controls.insertProfileInfo) ui.controls.insertProfileInfo.classList.remove('hidden');
+                        if (ui.controls.btnClearSvgInsert) ui.controls.btnClearSvgInsert.classList.remove('hidden');
+                        setPreviewMode('insert');
+                    }
+                    update();
+                })
+                .catch(error => {
+                    console.error("SVG import error:", error);
+                    alert("Errore caricamento SVG: " + error.message);
+                });
         }
 
+        // Funzione processSVG deprecata - mantenuta per retrocompatibilità ma reindirizzata a SVGProfileManager
         function processSVG(svgText, fileName, type) {
             try {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(svgText, "image/svg+xml");
+                // Usa SVGProfileManager per importare direttamente da testo
+                const profile = svgProfileManager.loadFromText(svgText, type, fileName);
+                const profileData = svgProfileManager.toIndexFormat(type);
                 
-                // Crea un contenitore nascosto ma renderizzato per calcolare le matrici CTM
-                const tempDiv = document.createElement('div');
-                tempDiv.style.position = 'absolute';
-                tempDiv.style.visibility = 'hidden';
-                tempDiv.style.pointerEvents = 'none';
-                
-                // Importa il nodo radice per assicurarsi che i namespace siano corretti
-                const importedSVG = document.importNode(doc.documentElement, true);
-                tempDiv.appendChild(importedSVG);
-                document.body.appendChild(tempDiv);
-                
-                const allPaths = tempDiv.querySelectorAll('path');
-                if (allPaths.length === 0) { 
-                    document.body.removeChild(tempDiv);
-                    alert("Nessun percorso trovato nel file SVG."); 
-                    return; 
-                }
-                
-                const polygons = [];
-                const pathStrings = []; // Qui salveremo le nuove stringhe "Baked"
-                
-                // Estrazione Geometria con applicazione trasformazioni (Fix Relativo)
-                allPaths.forEach(path => {
-                    const len = path.getTotalLength();
-                    const points = [];
-                    // Aumentiamo risoluzione per una conversione polilinea fedele
-                    const numSteps = 400; 
-                    
-                    // Ottiene la matrice di trasformazione globale (include transforms dei gruppi genitori)
-                    const ctm = path.getCTM();
-
-                    let polyPathD = "";
-
-                    for (let i=0; i<=numSteps; i++) {
-                        let pt = path.getPointAtLength((i/numSteps)*len);
-                        
-                        // Applica la trasformazione al punto
-                        if (ctm) {
-                            pt = pt.matrixTransform(ctm);
-                        }
-
-                        points.push({x: pt.x, y: pt.y});
-                        
-                        // Ricostruisce il path come polilinea assoluta
-                        // M = Move to, L = Line to
-                        const cmd = i === 0 ? "M" : "L";
-                        polyPathD += `${cmd} ${pt.x.toFixed(3)} ${pt.y.toFixed(3)} `;
-                    }
-                    polyPathD += "Z"; // Chiude il loop
-
-                    polygons.push(points);
-                    pathStrings.push(polyPathD);
-                });
-                
-                document.body.removeChild(tempDiv);
-
-                // Calcolo Proprietà per ogni tracciato (ora su punti trasformati)
-                let shapes = polygons.map((poly, index) => {
-                    let A = 0; let Sy = 0; let Sx = 0; let Ix_raw = 0; let Iy_raw = 0;
-                    // Teorema di Green
-                    for (let i = 0; i < poly.length - 1; i++) {
-                        const p1 = poly[i]; const p2 = poly[i+1];
-                        const term = (p1.x * p2.y - p2.x * p1.y);
-                        A += term;
-                        Sy += (p1.y + p2.y) * term;
-                        Sx += (p1.x + p2.x) * term;
-                        Ix_raw += (p1.y*p1.y + p1.y*p2.y + p2.y*p2.y) * term;
-                        Iy_raw += (p1.x*p1.x + p1.x*p2.x + p2.x*p2.x) * term;
-                    }
-                    A *= 0.5; Sy *= (1/6); Sx *= (1/6); Ix_raw *= (1/12); Iy_raw *= (1/12);
-                    return { A: Math.abs(A), signedA: A, Sy, Sx, Ix_raw, Iy_raw, d: pathStrings[index], points: poly };
-                });
-
-                // Ordinamento per Area Decrescente
-                shapes.sort((a,b) => b.A - a.A);
-
-                // Logica di selezione dei tracciati
-                let selectedShapes = [];
-                let logicInfo = "";
-
-                if (shapes.length >= 3) {
-                    if (type === 'beam') {
-                        // Profilo: Area tra Esterno (0) e Medio (1)
-                        selectedShapes = [shapes[0], shapes[1]];
-                        logicInfo = "3 Layer: Profilo (Est - Med)";
-                    } else {
-                        // Spalla: Area tra Medio (1) e Interno (2)
-                        selectedShapes = [shapes[1], shapes[2]];
-                        logicInfo = "3 Layer: Spalla (Med - Int)";
-                    }
-                } else if (shapes.length === 2) {
-                    // Standard: Esterno (0) - Interno (1)
-                    selectedShapes = [shapes[0], shapes[1]];
-                    logicInfo = "2 Layer: Standard";
-                } else {
-                    selectedShapes = [shapes[0]];
-                    logicInfo = "1 Layer: Pieno";
-                }
-
-                // Calcolo Combinato (Forma Positiva - Forma Negativa)
-                const s1 = selectedShapes[0];
-                const s2 = selectedShapes[1]; 
-
-                let combinedArea, combinedMy, combinedMx, combinedIxOrig, combinedIyOrig;
-
-                // Proprietà base Shape 1 (Guscio Esterno)
-                const A1 = s1.A;
-                const Cx1 = s1.Sx / s1.signedA;
-                const Cy1 = s1.Sy / s1.signedA;
-                // Ix_raw è rispetto all'origine globale. Assicuriamo sia positivo.
-                const I_x_orig_1 = Math.abs(s1.Ix_raw); 
-                const I_y_orig_1 = Math.abs(s1.Iy_raw);
-
-                if (s2) {
-                    const A2 = s2.A;
-                    const Cx2 = s2.Sx / s2.signedA;
-                    const Cy2 = s2.Sy / s2.signedA;
-                    const I_x_orig_2 = Math.abs(s2.Ix_raw);
-                    const I_y_orig_2 = Math.abs(s2.Iy_raw);
-
-                    combinedArea = A1 - A2;
-                    combinedMx = (A1 * Cy1) - (A2 * Cy2); 
-                    combinedMy = (A1 * Cx1) - (A2 * Cx2); 
-                    combinedIxOrig = I_x_orig_1 - I_x_orig_2;
-                    combinedIyOrig = I_y_orig_1 - I_y_orig_2;
-                } else {
-                    combinedArea = A1;
-                    combinedMx = A1 * Cy1;
-                    combinedMy = A1 * Cx1;
-                    combinedIxOrig = I_x_orig_1;
-                    combinedIyOrig = I_y_orig_1;
-                }
-
-                if (combinedArea <= 0.0001) throw new Error("Area nulla o non valida");
-
-                const globalCx = combinedMy / combinedArea;
-                const globalCy = combinedMx / combinedArea;
-
-                // Teorema Huygens-Steiner (Assi Paralleli)
-                // Trasliamo dal riferimento globale al baricentro della sezione composta
-                const I_x_centroid = combinedIxOrig - combinedArea * globalCy * globalCy;
-                // const I_y_centroid = combinedIyOrig - combinedArea * globalCx * globalCx;
-
-                // Calcolo bounding box (basato sui punti trasformati)
-                let bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-                selectedShapes.forEach(s => {
-                    s.points.forEach(p => {
-                        if(p.x < bounds.minX) bounds.minX = p.x;
-                        if(p.x > bounds.maxX) bounds.maxX = p.x;
-                        if(p.y < bounds.minY) bounds.minY = p.y;
-                        if(p.y > bounds.maxY) bounds.maxY = p.y;
-                    });
-                });
-
-                const I_cm4 = I_x_centroid / 10000;
-                
-                // Creiamo pathData combinato con le nuove stringhe "Baked"
-                const combinedPathData = selectedShapes.map(s => s.d).join(' ');
-
-                const profileData = { 
-                    name: fileName, 
-                    I_mm4: I_x_centroid, 
-                    area_mm2: combinedArea,
-                    height_mm: bounds.maxY - bounds.minY, 
-                    width_mm: bounds.maxX - bounds.minX, 
-                    pathData: combinedPathData,
-                    bounds: bounds
-                };
-
                 if (type === 'beam') {
                     state.customProfile = profileData;
-                    if (ui.displays.svgName) ui.displays.svgName.textContent = fileName.length > 15 ? fileName.substring(0,12)+"..." : fileName;
-                    if (ui.displays.svgInertia) ui.displays.svgInertia.textContent = I_cm4.toFixed(2);
-                    if (ui.displays.beamLayerInfo) ui.displays.beamLayerInfo.textContent = logicInfo;
+                    if (ui.displays.svgName) {
+                        const displayName = profileData.name.length > 15 ? 
+                            profileData.name.substring(0, 12) + "..." : 
+                            profileData.name;
+                        ui.displays.svgName.textContent = displayName;
+                    }
+                    if (ui.displays.svgInertia) {
+                        const I_cm4 = profileData.I_mm4 / 10000;
+                        ui.displays.svgInertia.textContent = I_cm4.toFixed(2);
+                    }
+                    if (ui.displays.beamLayerInfo) {
+                        ui.displays.beamLayerInfo.textContent = profileData.layerInfo || '';
+                    }
                     if (ui.controls.manualGeom) ui.controls.manualGeom.classList.add('disabled-group');
                     if (ui.controls.profileInfo) ui.controls.profileInfo.classList.remove('hidden');
                     if (ui.controls.btnClearSvg) ui.controls.btnClearSvg.classList.remove('hidden');
                     setPreviewMode('beam');
                 } else {
                     state.customInsertProfile = profileData;
-                    if (ui.displays.svgInsertName) ui.displays.svgInsertName.textContent = fileName.length > 15 ? fileName.substring(0,12)+"..." : fileName;
-                    if (ui.displays.svgInsertInertia) ui.displays.svgInsertInertia.textContent = I_cm4.toFixed(2);
-                    if (ui.displays.insertLayerInfo) ui.displays.insertLayerInfo.textContent = logicInfo;
+                    if (ui.displays.svgInsertName) {
+                        const displayName = profileData.name.length > 15 ? 
+                            profileData.name.substring(0, 12) + "..." : 
+                            profileData.name;
+                        ui.displays.svgInsertName.textContent = displayName;
+                    }
+                    if (ui.displays.svgInsertInertia) {
+                        const I_cm4 = profileData.I_mm4 / 10000;
+                        ui.displays.svgInsertInertia.textContent = I_cm4.toFixed(2);
+                    }
+                    if (ui.displays.insertLayerInfo) {
+                        ui.displays.insertLayerInfo.textContent = profileData.layerInfo || '';
+                    }
                     if (ui.controls.manualInsert) ui.controls.manualInsert.classList.add('disabled-group');
                     if (ui.controls.insertProfileInfo) ui.controls.insertProfileInfo.classList.remove('hidden');
                     if (ui.controls.btnClearSvgInsert) ui.controls.btnClearSvgInsert.classList.remove('hidden');
@@ -959,6 +871,9 @@
         }
 
         function clearProfile(type) {
+            // Usa SVGProfileManager per pulire il profilo
+            svgProfileManager.clearProfile(type);
+            
             if (type === 'beam') {
                 state.customProfile = null;
                 if (ui.inputs.fileSvg) ui.inputs.fileSvg.value = "";
