@@ -171,4 +171,4 @@ Questo progetto è fornito per scopi educativi e di ricerca.
 ---
 
 **Version**: 1.0  
-**Last Updated**: 2026-01-07
+**Last Updated**: January 2024

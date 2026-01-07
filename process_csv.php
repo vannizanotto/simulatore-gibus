@@ -33,9 +33,13 @@ function fetchCostoPaolo($url) {
         ]
     ]);
     
-    $response = @file_get_contents($url, false, $context);
+    // Effettua la richiesta HTTP senza soppressione errori
+    $response = file_get_contents($url, false, $context);
     
+    // Gestione esplicita degli errori
     if ($response === false) {
+        $error = error_get_last();
+        error_log("Errore recupero costo per URL: $url - " . ($error['message'] ?? 'Unknown error'));
         return 'Errore recupero';
     }
     
@@ -55,7 +59,8 @@ function parseCSV($filepath) {
     
     $rows = [];
     if (($handle = fopen($filepath, "r")) !== false) {
-        while (($data = fgetcsv($handle, 1000, ",")) !== false) {
+        // Usa un buffer più grande per gestire campi CSV lunghi
+        while (($data = fgetcsv($handle, 10000, ",")) !== false) {
             $rows[] = $data;
         }
         fclose($handle);
@@ -425,10 +430,13 @@ if ($csvFile && !$error) {
                 <h2>Carica il tuo file CSV</h2>
                 <p>Il file deve contenere il codice articolo nella seconda colonna</p>
                 
-                <form method="POST" enctype="multipart/form-data">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
                     <div class="file-input-wrapper">
-                        <input type="file" name="csv_file" id="csv_file" accept=".csv" onchange="this.form.submit()">
+                        <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
                         <label for="csv_file" class="file-label">📁 Seleziona File CSV</label>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button type="submit" name="submit" class="btn btn-primary">🚀 Carica e Processa</button>
                     </div>
                 </form>
                 
@@ -471,6 +479,16 @@ if ($csvFile && !$error) {
             const label = document.querySelector('.file-label');
             if (label && e.target.files[0]) {
                 label.textContent = '📁 ' + fileName;
+            }
+        });
+        
+        // Validazione form prima del submit
+        document.getElementById('uploadForm')?.addEventListener('submit', function(e) {
+            const fileInput = document.getElementById('csv_file');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Seleziona un file CSV prima di procedere');
+                e.preventDefault();
+                return false;
             }
         });
     </script>
